@@ -10,6 +10,8 @@ A-Train moves at 2x normal speed and can trigger a 1.5-second, 2.2x Speed Burst 
 
 The roster includes PhaseShift's close-range Phase Dash and multi-hit Afterimage Flurry, plus Tidebreaker's water projectile and Tidal Crash. A-Train now wears blue and has a homing Speed Punch: block the first punch to cancel the rush; if it gets through, its follow-up punches cannot be blocked.
 
+Choose from five arenas: the neon rooftop, sunset harbor, a stone colosseum, a frozen outpost, and an orbital platform. Blocking now cuts chip damage and adds recovery to attacks it stops, making repeated attacks riskier. Grounded uppercuts can catch nearby airborne fighters, and flight is capped lower to keep non-flying fighters in range.
+
 Online movement is screen-relative on both computers: `A`/left arrow always moves left and `D`/right arrow always moves right. Movement and attack recovery are faster, punches extend straight toward the opponent, and kicks snap forward from a raised knee—even in flight. A follow-up press during a strike can chain into the next move after a hit.
 
 Fly-capable heroes can fly for up to 10 seconds, followed by a 10-second cooldown; the HUD shows flight fuel and recharge. Homelander has faster aerial movement, and `U` targets an opponent below with downward Heat Vision when he is flying above them. The camera pulls back smoothly as either fighter rises and returns to its normal framing near the ground. Hits produce stylized blood droplets and rooftop marks; high hits can also cause a temporary nosebleed.
