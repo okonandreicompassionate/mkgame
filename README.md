@@ -12,6 +12,8 @@ Online movement is screen-relative on both computers: `A`/left arrow always move
 
 Fly-capable heroes can fly for up to 10 seconds, followed by a 10-second cooldown; the HUD shows flight fuel and recharge. Homelander has faster aerial movement, and `U` targets an opponent below with downward Heat Vision when he is flying above them. The camera pulls back smoothly as either fighter rises and returns to its normal framing near the ground. Hits produce stylized blood droplets and rooftop marks; high hits can also cause a temporary nosebleed.
 
+On mobile, use the on-screen controls. The layout and camera resize when the device rotates, with a compact landscape layout; portrait remains supported.
+
 ### Run locally
 
 1. Install Node.js.

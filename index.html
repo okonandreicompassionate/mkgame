@@ -149,6 +149,31 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
 .fighter-preview.maeve .preview-cape{display:none}
 #menu p{margin:0;font-size:12px;color:#9a9bab}
 .pad button{width:52px;height:52px}
+@media (orientation:landscape) and (max-height:520px){
+  #hud{top:calc(env(safe-area-inset-top,0px) + 4px);gap:6px;padding:0 8px}
+  .nm{font-size:clamp(10px,2.2vw,13px)}
+  .bar{height:14px;margin:2px 4px}
+  .pips span{width:8px;height:8px;margin:1px 2px}
+  .lzrow{margin:1px 3px}
+  .lz{width:clamp(44px,9vw,76px);margin:2px 4px}
+  .lzlbl{width:36px;font-size:8px}
+  #tm{width:clamp(40px,7vw,58px);font-size:clamp(21px,6vh,30px)}
+  #cb{top:calc(env(safe-area-inset-top,0px) + 62px)}
+  .pad{bottom:calc(env(safe-area-inset-bottom,0px) + 4px);padding:0 6px}
+  .grp{max-width:47vw;gap:clamp(3px,.5vw,5px)}
+  .pad button{width:clamp(38px,5.4vw,46px);height:clamp(38px,5.4vw,46px);font-size:clamp(16px,2.8vw,20px)}
+  #home{gap:7px;padding:calc(env(safe-area-inset-top,0px) + 8px) 12px calc(env(safe-area-inset-bottom,0px) + 8px);overflow-y:auto}
+  #home h2{font-size:clamp(18px,4vw,28px)}
+  #home p{font-size:12px}
+  #home button,#home input{min-height:36px;padding:6px 12px}
+  #menu{gap:8px;padding:calc(env(safe-area-inset-top,0px) + 10px) 8px calc(env(safe-area-inset-bottom,0px) + 8px)}
+  #mt{font-size:clamp(18px,4vw,28px)}
+  #mc{gap:8px}
+  .card{width:clamp(120px,20vw,170px);padding:6px 8px 8px}
+  .fighter-preview{transform:scale(.62);transform-origin:top center;height:92px;margin-bottom:4px}
+  .card b{font-size:12px;margin-bottom:4px}
+  .card small{font-size:10px}
+}
 #msg{transition:color .2s}
 </style>
 </head>
@@ -258,8 +283,12 @@ function setupPost(){
     gradePass=new THREE.ShaderPass(gradeShader);gradePass.renderToScreen=true;composer.addPass(gradePass);
   }catch(e){composer=null}
 }
-function resize(){R.setSize(innerWidth,innerHeight);cam.aspect=innerWidth/innerHeight;cam.fov=cam.aspect<1?50:30;cam.updateProjectionMatrix();if(composer){if(composer.setPixelRatio)composer.setPixelRatio(pr);composer.setSize(innerWidth,innerHeight)}}
-addEventListener('resize',resize);resize();setupPost();
+function resize(){const w=Math.max(1,innerWidth),h=Math.max(1,innerHeight);R.setSize(w,h);cam.aspect=w/h;cam.fov=cam.aspect<1?50:30;cam.updateProjectionMatrix();if(composer){if(composer.setPixelRatio)composer.setPixelRatio(pr);composer.setSize(w,h)}}
+function resizeAfterRotation(){resize();setTimeout(resize,150)}
+addEventListener('resize',resize,{passive:true});addEventListener('orientationchange',resizeAfterRotation,{passive:true});
+if(screen.orientation&&screen.orientation.addEventListener)screen.orientation.addEventListener('change',resizeAfterRotation);
+if(window.visualViewport)window.visualViewport.addEventListener('resize',resize,{passive:true});
+resize();setupPost();
 function ctex(w,h,fn){const c=document.createElement('canvas');c.width=w;c.height=h;fn(c.getContext('2d'),w,h);const t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;return t}
 let seed=11;const rnd=()=>(seed=(seed*9301+49297)%233280)/233280;
 const dotTex=ctex(32,32,g=>{const r=g.createRadialGradient(16,16,0,16,16,16);r.addColorStop(0,'rgba(255,255,255,1)');r.addColorStop(.35,'rgba(255,255,255,.55)');r.addColorStop(1,'rgba(255,255,255,0)');g.fillStyle=r;g.fillRect(0,0,32,32)});
