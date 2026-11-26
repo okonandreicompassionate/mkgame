@@ -8,6 +8,8 @@ Online controls are relayed immediately, quick taps are buffered until the next 
 
 A-Train moves at 2x normal speed and can trigger a 1.5-second, 2.2x Speed Burst on `R` (also available as a touchscreen button), with a five-second cooldown. Each fighter's `E` special is individually tuned to its signature move; attack buttons trigger once per press rather than restarting while held.
 
+Online movement is screen-relative on both computers: `A`/left arrow always moves left and `D`/right arrow always moves right. Movement and attack recovery are faster, and a follow-up press during a strike can chain into the next move after a hit.
+
 ### Run locally
 
 1. Install Node.js.
