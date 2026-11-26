@@ -50,6 +50,11 @@ function leaveRoom(socket) {
 function routeMessage(socket, message) {
   if (typeof message.type !== 'string') return sendError(socket, 'Invalid message.');
 
+  if (message.type === 'ping') {
+    if (Number.isSafeInteger(message.id)) send(socket, { type: 'pong', id: message.id });
+    return;
+  }
+
   if (message.type === 'create') {
     if (socket.room) return sendError(socket, 'You are already in a room.');
     const room = { code: makeRoomCode(), host: socket, guest: null };
@@ -82,7 +87,7 @@ function routeMessage(socket, message) {
     const input = message.input;
     if (!input || typeof input !== 'object' || Array.isArray(input)) return;
     const cleanInput = {}, cleanPressed = {};
-    for (const key of ['a', 'd', 'w', 'j', 'k', 'l', 'u', 'o', 'e', 'i']) {
+    for (const key of ['a', 'd', 'w', 'j', 'k', 'l', 'u', 'o', 'e', 'i', 'r']) {
       cleanInput[key] = input[key] === true;
       cleanPressed[key] = !!message.pressed && message.pressed[key] === true;
     }
@@ -95,6 +100,7 @@ function routeMessage(socket, message) {
   }
 
   if (socket.role === 'host' && message.type === 'snapshot') {
+    if (target.bufferedAmount > 8192) return;
     return send(target, { type: 'snapshot', snapshot: message.snapshot });
   }
 
@@ -141,7 +147,7 @@ const server = http.createServer((request, response) => {
   });
 });
 
-const webSockets = new WebSocketServer({ noServer: true, maxPayload: 16 * 1024 });
+const webSockets = new WebSocketServer({ noServer: true, maxPayload: 16 * 1024, perMessageDeflate: false });
 server.on('upgrade', (request, socket, head) => {
   if (request.url !== '/ws') {
     socket.destroy();
@@ -151,6 +157,7 @@ server.on('upgrade', (request, socket, head) => {
 });
 
 webSockets.on('connection', socket => {
+  socket._socket.setNoDelay(true);
   let messagesThisSecond = 0;
   let rateWindow = Date.now();
   socket.on('message', raw => {
