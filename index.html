@@ -49,6 +49,8 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
 .lzlbl{font-size:9px;letter-spacing:.1em;color:#9a9bab;width:40px}
 .r .lzlbl{text-align:right}
 #speed-meter{background:linear-gradient(90deg,#ffdf40,#ff7733)}
+#flight-meter{background:linear-gradient(90deg,#63f5ff,#318dff)}
+#flight-meter.cooldown{background:linear-gradient(90deg,#ffdf40,#ff7733)}
 #asset-status{position:fixed;top:calc(env(safe-area-inset-top,0px) + 72px);left:0;right:0;text-align:center;font-size:11px;letter-spacing:.08em;color:#d4d7e8;text-shadow:0 1px 5px #000;pointer-events:none}
 #menu{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:flex-start;gap:14px;background:rgba(5,6,12,.96);z-index:20;text-align:center;padding:calc(env(safe-area-inset-top,0px) + 56px) 12px calc(env(safe-area-inset-bottom,0px) + 28px);overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;touch-action:pan-y;overscroll-behavior:contain}
 #menu>*{flex-shrink:0}#menu>:first-child{margin-top:auto}#menu>:last-child{margin-bottom:auto}
@@ -177,7 +179,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
       <div><b>J</b> Punch</div><div><b>K</b> Kick</div>
       <div><b>L or S</b> Block</div><div><b>O</b> Uppercut</div>
       <div><b>U</b> Hero power</div><div><b>E</b> Special (50% meter)</div>
-      <div><b>R</b> A-Train speed burst</div><div><b>I</b> Toggle flight*</div>
+      <div><b>R</b> A-Train speed burst</div><div><b>I</b> Flight: 10 seconds; 10-second cooldown*</div>
       <div><b>P / Esc</b> Pause (local/host)</div>
       <div><b>A A / D D</b> Double-tap dash</div><div><b>Air + K</b> Dive kick</div><div><b>M</b> Mute</div><div><b>*Flying</b> W up, S down</div>
     </div>
@@ -186,12 +188,12 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
 </div>
 <button id="mute" title="Mute (M)">🔊</button>
 <div id="hud">
-  <div class="side"><div class="nm" id="n1">HOMELANDER</div><div class="bar"><div class="fill" id="h1"></div></div><div class="pips" id="p1"><span></span><span></span></div><div class="lzrow"><span class="lzlbl">LASER</span><div class="lz"><i id="lz"></i></div></div><div class="lzrow"><span class="lzlbl">SPECIAL</span><div class="lz"><i id="sm" style="background:linear-gradient(90deg,#ffd24a,#ff7733);width:0"></i></div></div><div class="lzrow" id="speed-row" style="display:none"><span class="lzlbl">SPEED</span><div class="lz"><i id="speed-meter"></i></div></div></div>
+  <div class="side"><div class="nm" id="n1">HOMELANDER</div><div class="bar"><div class="fill" id="h1"></div></div><div class="pips" id="p1"><span></span><span></span></div><div class="lzrow"><span class="lzlbl">LASER</span><div class="lz"><i id="lz"></i></div></div><div class="lzrow"><span class="lzlbl">SPECIAL</span><div class="lz"><i id="sm" style="background:linear-gradient(90deg,#ffd24a,#ff7733);width:0"></i></div></div><div class="lzrow" id="flight-row-1" style="display:none"><span class="lzlbl">FLIGHT</span><div class="lz"><i id="flight-meter-1"></i></div></div><div class="lzrow" id="speed-row" style="display:none"><span class="lzlbl">SPEED</span><div class="lz"><i id="speed-meter"></i></div></div></div>
   <div id="tm">99</div><div id="net-status" aria-live="polite"></div>
-  <div class="side r"><div class="nm" id="n2">RIVAL BOT</div><div class="bar"><div class="fill" id="h2"></div></div><div class="pips" id="p2"><span></span><span></span></div></div>
+  <div class="side r"><div class="nm" id="n2">RIVAL BOT</div><div class="bar"><div class="fill" id="h2"></div></div><div class="pips" id="p2"><span></span><span></span></div><div class="lzrow" id="flight-row-2" style="display:none"><span class="lzlbl">FLIGHT</span><div class="lz"><i id="flight-meter-2"></i></div></div></div>
 </div>
 <div id="msg"></div><div id="cb"></div><div id="mv"></div>
-<div id="help"><b>A/←</b> left · <b>D/→</b> right · <b>W</b> jump · <b>J</b> punch · <b>K</b> kick · <b>L</b>/<b>S</b> block · <b>U</b> hero power (laser / dash / charge) · <b>R</b> speed burst (A-Train) · <b>O</b> uppercut · <b>E</b> special (50%) · <b>I</b> fly (W up / S down) · <b>M</b> mute · <b>Enter</b> menu</div>
+<div id="help"><b>A/←</b> left · <b>D/→</b> right · <b>W</b> jump · <b>J</b> punch · <b>K</b> kick · <b>L</b>/<b>S</b> block · <b>U</b> hero power (laser / dash / charge) · <b>R</b> speed burst (A-Train) · <b>O</b> uppercut · <b>E</b> special (50%) · <b>I</b> fly (10s; 10s recharge) · <b>M</b> mute · <b>Enter</b> menu</div>
 <div class="pad">
   <div class="grp"><button data-k="a">◀</button><button data-k="d">▶</button><button data-k="w">▲</button></div>
   <div class="grp"><button data-k="j">👊</button><button data-k="k">🦵</button><button data-k="l">🛡</button><button data-k="u">👁</button><button data-k="r">⚡</button><button data-k="o">⤴</button><button data-k="e">✦</button><button data-k="i">🕊</button></div>
@@ -553,6 +555,7 @@ $('asset-status').textContent='';
 
 // ---------- game logic ----------
 const ATK={p:{dur:18,s:5,e:10,dmg:6,range:1,kb:.18,lg:.03},k:{dur:28,s:9,e:15,dmg:10,range:1.25,kb:.3,lg:.02},l:{dur:30,s:12,e:12,dmg:12,range:99,kb:.12},h:{dur:40,s:15,e:21,dmg:15,range:1.05,kb:.06,lg:.02,up:.24},s:{dur:44,s:6,e:30,dmg:20,range:1.2,kb:.2,up:.1}};
+const FLIGHT_TIME=10*60,FLIGHT_COOLDOWN=10*60;
 const ATTACK_TEMPO=.62;
 function atkOf(f,type){
   let base=ATK[type];
@@ -652,7 +655,7 @@ function clearBlood(){
   for(const m of bloodStains)m.visible=false;
   bloodStainCursor=0;for(const m of cracks)m.visible=false;
 }
-function mk(x,face,m,cfg){const noseBlood=new THREE.Sprite(noseBloodMat);noseBlood.scale.set(.055,.105,1);noseBlood.visible=false;S.add(noseBlood);m.bloodNose=noseBlood;const aura=new THREE.Sprite(new THREE.SpriteMaterial({map:dotTex,color:cfg.acc||cfg.eye,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,opacity:0}));aura.scale.set(3.6,4.6,1);S.add(aura);m.aura=aura;return{x,y:0,vx:0,vy:0,face,hp:100,atk:null,bufferedAttack:null,bleedT:0,cd:0,lcd:0,speedBoostT:0,speedBoostCd:0,rp:false,block:false,hit:0,wins:0,koT:0,sp:0,cmb:0,cmbT:0,hurtT:0,gb:0,hz:'',altp:false,inputHeld:{},sq:0,land:0,tair:0,kdT:0,bn:0,getup:0,fly:false,down:false,landed:false,ip:false,m,cfg,z:face>0?.1:-.1}}
+function mk(x,face,m,cfg){const noseBlood=new THREE.Sprite(noseBloodMat);noseBlood.scale.set(.055,.105,1);noseBlood.visible=false;S.add(noseBlood);m.bloodNose=noseBlood;const aura=new THREE.Sprite(new THREE.SpriteMaterial({map:dotTex,color:cfg.acc||cfg.eye,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,opacity:0}));aura.scale.set(3.6,4.6,1);S.add(aura);m.aura=aura;return{x,y:0,vx:0,vy:0,face,hp:100,atk:null,bufferedAttack:null,bleedT:0,cd:0,lcd:0,flightT:FLIGHT_TIME,flightCd:0,speedBoostT:0,speedBoostCd:0,rp:false,block:false,hit:0,wins:0,koT:0,sp:0,cmb:0,cmbT:0,hurtT:0,gb:0,hz:'',altp:false,inputHeld:{},sq:0,land:0,tair:0,kdT:0,bn:0,getup:0,fly:false,down:false,landed:false,ip:false,m,cfg,z:face>0?.1:-.1}}
 let first=true,pw=0,bw=0,pick=0,opp=1,mStep=0,mIdx=0;
 const STG=[['ROOFTOP','Neon skyline, night'],['NEON HARBOR','Dockside at dusk']];
 const INPUT_KEYS=['a','d','w','j','k','l','u','o','e','i','r'];
@@ -758,7 +761,7 @@ function openHeroHelp(hero){
   const powers=[
     'Hero power (U): '+hero.laserName+(hero.lDash?' — a forward dash that strikes at close range.':hero.proj?' — a projectile that can clash with enemy shots.':' — a long-range energy beam.')+(hero.downLaser?' While airborne, it can target an opponent below.':''),
     'Signature special (E, 50% meter): '+hero.special+'.',
-    hero.fly?'Flight (I): toggle flight; hold W to rise and L/S to descend.':'Flight: unavailable for this fighter.'
+    hero.fly?'Flight (I): up to 10 seconds; then 10 seconds to recharge. Hold W to rise and L/S to descend.':'Flight: unavailable for this fighter.'
   ];
   if(hero.sAtk&&hero.sAtk.hits)powers.push('Multi-hit special: up to '+hero.sAtk.hits+' strikes.');
   if(hero.speedMul)powers.push('Passive: faster normal movement.');
@@ -893,6 +896,7 @@ function step(f,o,inp){
     attackPressed[key]=!!inp[key]&&!f.inputHeld[key];
     f.inputHeld[key]=!!inp[key];
   }
+  if(f.flightCd>0){f.flightCd--;if(f.flightCd===0)f.flightT=FLIGHT_TIME}
   if(f.bufferedAttack&&--f.bufferedAttack.frames<=0)f.bufferedAttack=null;
   if(f.gb>0)f.gb=Math.max(0,f.gb-.04);
   if(f.cmbT>0)f.cmbT--;if(f.cd>0)f.cd--;if(f.lcd>0)f.lcd--;if(f.getup>0)f.getup--;if(f.land>0)f.land--;
@@ -904,8 +908,9 @@ function step(f,o,inp){
   f.rp=!!inp.r;
   const dPrev=!!f.pd,aPrev=!!f.pa;f.pd=!!inp.d;f.pa=!!inp.a;if(f.tapT>0)f.tapT--;
   const ground=f.y<=0;
-  if(inp.i&&!f.ip&&f.cfg.fly&&!f.atk&&!f.hit&&!f.down&&f.hp>0){f.fly=!f.fly;if(f.fly&&f.y<.05){f.vy=.1;f.sq=0}fx(f.x,f.y+.2,0xffffff,.7);sfx('fly')}
+  if(inp.i&&!f.ip&&f.cfg.fly&&!f.atk&&!f.hit&&!f.down&&f.hp>0&&(f.fly||f.flightCd<=0&&f.flightT>0)){f.fly=!f.fly;if(f.fly&&f.y<.05){f.vy=.1;f.sq=0}fx(f.x,f.y+.2,0xffffff,.7);sfx('fly')}
   f.ip=!!inp.i;
+  if(f.fly&&f.flightT>0&&--f.flightT===0){f.fly=false;f.flightCd=FLIGHT_COOLDOWN;fx(f.x,f.y+.2,0x63f5ff,.9);callout(f,'FLIGHT EXHAUSTED')}
   if(f.down){
     if(ground){
       if(!f.landed){f.landed=true;sfx('thud');f.kdT=f.hp<=0?9999:28;shake=Math.max(shake,.28);shockwave(f.x,0xbbaa99,.9);addCrack(f.x)}
@@ -1419,6 +1424,14 @@ function hud(){
   const pk=P.wins+'|'+B.wins;if(hc.pips!==pk){hc.pips=pk;
     [...$('p1').children].forEach((x,i)=>x.classList.toggle('on',i<P.wins));[...$('p2').children].forEach((x,i)=>x.classList.toggle('on',i<B.wins))}
   setS('lz','width',((100*(1-P.lcd/(P.cfg.lCd||110)))|0)+'%');setS('msg','color',/FATALITY|FINISH/.test(msg)?'#d0001e':'');
+  for(const [fighter,index] of[[P,1],[B,2]]){
+    const row=$('flight-row-'+index),meter=$('flight-meter-'+index),cooldown=fighter.flightCd||0;
+    row.style.display=fighter.cfg.fly?'flex':'none';
+    const progress=cooldown>0?1-cooldown/FLIGHT_COOLDOWN:(fighter.flightT||0)/FLIGHT_TIME;
+    meter.style.width=(Math.max(0,Math.min(1,progress))*100)+'%';
+    meter.classList.toggle('cooldown',cooldown>0);
+    row.title=cooldown>0?'Flight recharging: '+Math.ceil(cooldown/60)+' seconds':fighter.fly?'Flight remaining: '+(fighter.flightT/60).toFixed(1)+' seconds':'Flight ready: '+(fighter.flightT/60).toFixed(1)+' seconds';
+  }
   $('speed-row').style.display=P.cfg.speedBoost?'flex':'none';
   if(P.cfg.speedBoost){
     const boost=P.cfg.speedBoost,available=1-P.speedBoostCd/boost.cooldown;
