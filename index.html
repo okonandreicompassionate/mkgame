@@ -548,8 +548,8 @@ const BT={id:'bot',name:'RIVAL BOT',info:'Balanced cyber bruiser',suit:0x3a3a46,
 const CR={id:'crimson',name:'CRIMSON',info:'Hot-headed brawler',suit:0x8a1020,suit2:0x4a0a14,skin:0xd9a98a,hair:0x1a1010,cape:false,acc:0xff5533,eyeOff:0xff5533,eye:0xff5533,special:'INFERNO HOOK',laserName:'FLAME GLARE'};
 const SO={id:'solar',name:'SOLAR SENTINEL',info:'Aerial guard · Starburst Nova',fly:1,suit:0x294b68,suit2:0x17263e,skin:0xd4a17c,hair:0x273342,cape:true,capeColors:['#14223d','#44e0d1'],trim:0x44e0d1,eyeOff:0x17263e,eye:0x44e0d1,acc:0x44e0d1,special:'STARBURST NOVA',laserName:'SOLAR BEAM'};
 const OM={id:'omni',glb:'omni',name:'OMNI-MAN',info:'Brutal strength · Flight · Overlord Slam',fly:1,capeM:true,suit:0xeeeeee,suit2:0xc8c8c8,skin:0xd9a98a,hair:0x151210,cape:true,capeColors:['#b3162a','#8a1020'],trim:0xc4142d,eyeOff:0x222222,eye:0xff3322,acc:0xc4142d,special:'OVERLORD SLAM',laserName:'CRIMSON GLARE'};
-const AT={id:'atrain',name:'A-TRAIN',info:'Blue-suited speedster · Speed Burst · homing Speed Punch',suit:0x1875e8,suit2:0x0b2a68,skin:0x8a5a3c,hair:0x0c0c0c,cape:false,acc:0xffd24a,eyeOff:0x3a2a1a,eye:0xffd24a,speedMul:2,speedBoost:{duration:90,cooldown:300,multiplier:2.2},special:'SPEED PUNCH',laserName:'BLUR STRIKE',
-  sAtk:{dur:44,s:6,e:29,dmg:4.5,range:1.3,kb:.06,hits:3,hitGap:5,dash:.42,homing:true,blockCancelFirst:true,unblockableAfterFirst:true}};
+const AT={id:'atrain',name:'A-TRAIN',info:'Blue-suited speedster · Speed Burst · alternating Speed Punch',suit:0x1875e8,suit2:0x0b2a68,skin:0x8a5a3c,hair:0x0c0c0c,cape:false,acc:0xffd24a,eyeOff:0x3a2a1a,eye:0xffd24a,speedMul:2,speedBoost:{duration:90,cooldown:300,multiplier:2.2},special:'SPEED PUNCH',laserName:'BLUR STRIKE',
+  sAtk:{dur:58,s:9,e:44,dmg:1.5,range:1.3,kb:.02,up:0,hits:8,hitGap:5,dash:0,blockCancelFirst:true,unblockableAfterFirst:true,alternatingPunches:true}};
 const SF={id:'storm',name:'STORMFRONT',info:'Electric brawler · Volt Chain shock',suit:0x1c2230,suit2:0x11141c,skin:0xd9c7b0,hair:0xeeeeee,cape:false,feminine:true,acc:0x5ad1ff,eyeOff:0x1c2230,eye:0x5ad1ff,special:'VOLT CHAIN',laserName:'ARC FLASH',
   sAtk:{dur:46,s:4,e:34,dmg:7,range:1.15,kb:.1,hits:4,hitGap:8,dash:.1}};
 PL.sAtk={dur:42,s:8,e:25,dmg:18,range:1.35,kb:.3,up:.08,dash:.12};
@@ -559,7 +559,7 @@ BT.sAtk={dur:42,s:7,e:30,dmg:7.5,range:1.25,kb:.12,hits:2,hitGap:8,dash:.12};
 PL.capeM=true;
 OM.lDash=.2;OM.lAtk={dur:40,s:8,e:26,dmg:14,kb:.2};OM.lUp=.11;OM.laserName='VILTRUMITE CHARGE';OM.info='Brutal strength · Flight · Viltrumite Charge';
 OM.sAtk={dur:48,s:12,e:29,dmg:21,range:1.45,kb:.34,up:.08,dash:.14};
-AT.lDash=.42;AT.lAtk={dur:26,s:3,e:12,dmg:9,kb:.14};AT.lCd=50;AT.laserName='BLUR DASH';AT.info='Super speed · Speed Burst · Blur Dash · Speed Punch';
+AT.lDash=.42;AT.lAtk={dur:26,s:3,e:12,dmg:9,kb:.14};AT.lCd=50;AT.laserName='BLUR DASH';AT.info='Super speed · Speed Burst · Blur Dash · alternating Speed Punch';
 SF.fly=1;PL.bulk=1.05;OM.bulk=1.14;AT.bulk=.86;SF.bulk=.95;CR.bulk=1.14;BT.bulk=1.1;
 PL.glove=0xb3162a;PL.boot=0x8a1020;OM.glove=0xc4142d;OM.boot=0xc4142d;OM.stache=true;AT.glove=0xffd24a;AT.boot=0x123d8f;SF.glove=0x5ad1ff;SF.boot=0x11141c;
 const BN={id:'noir',name:'BLACK NOIR',info:'Silent assassin · Throwing blades · Fast',suit:0x0a0a0e,suit2:0x050507,skin:0x141418,hair:0x050505,cape:false,acc:0xcccccc,eyeOff:0xffffff,eye:0xffffff,special:'SILENT EXECUTION',laserName:'THROWING BLADES',speedMul:1.4,
@@ -844,8 +844,10 @@ function openHeroHelp(hero){
     'Signature special (E, 50% meter): '+hero.special+'.',
     hero.fly?'Flight (I): up to 10 seconds; then 10 seconds to recharge. Hold W to rise and L/S to descend.':'Flight: unavailable for this fighter.'
   ];
-  if(hero.sAtk&&hero.sAtk.hits)powers.push('Multi-hit special: up to '+hero.sAtk.hits+' strikes.');
-  if(hero.sAtk&&hero.sAtk.blockCancelFirst)powers.push('Speed Punch: it homes in and lands three fast hits; block the first punch to cancel the rush. Later punches cannot be blocked.');
+  if(hero.sAtk&&hero.sAtk.hits&&hero.id!=='atrain')powers.push('Multi-hit special: up to '+hero.sAtk.hits+' strikes.');
+  if(hero.sAtk&&hero.sAtk.blockCancelFirst)powers.push(hero.id==='atrain'
+    ?'Speed Punch: at close range it automatically alternates eight rapid punches. Each punch deals light damage; block the first one to cancel the flurry. Later punches cannot be blocked.'
+    :'Block the first hit to cancel this special; its follow-up hits cannot be blocked.');
   if(hero.speedMul)powers.push('Passive: faster normal movement.');
   if(hero.speedBoost)powers.push('Speed Burst (R): '+Math.round(hero.speedBoost.duration/60*10)/10+' seconds of '+hero.speedBoost.multiplier+'× movement speed; '+Math.round(hero.speedBoost.cooldown/60)+' second recharge.');
   const list=$('hero-power-list');list.textContent='';
@@ -1031,6 +1033,10 @@ function step(f,o,inp){
     if(f.atk.type==='k'&&f.atk.t===a.s)f.vx=f.face*(f.fly?.18:.12);
     if(f.atk.type==='s'&&a.homing){f.face=o.x>=f.x?1:-1;f.vx=f.face*Math.min(a.dash||.2,Math.max(.11,Math.abs(o.x-f.x)*.45))}
     else if(f.atk.type==='s'&&f.atk.t>=a.s&&f.atk.t<=a.e)f.vx=f.face*(a.dash!==undefined?a.dash:.2);
+    if(a.alternatingPunches&&f.atk.t>=a.s&&f.atk.t<=a.e&&f.atk.t%2===0){
+      const interval=Math.max(2,a.hitGap||3),hand=Math.floor((f.atk.t-a.s)/interval)%2;
+      trailAt({x:f.x-f.face*.18,y:f.y+.85+(hand?.45:.9)},hand?f.cfg.acc||0xffd24a:0xffffff);
+    }
     if(a.lg&&f.atk.t===a.s-2)f.vx=f.face*a.lg*2;
     if(f.atk.type==='s'&&f.atk.t===a.s){fx(f.x,f.y+1,f.cfg.eye,1.4);shockwave(f.x,f.cfg.eye||0xffffff,1.6);camKick(.8);flash(.25)}
     if(!f.atk.done&&f.atk.t>=a.s&&f.atk.t<=a.e){
@@ -1205,6 +1211,15 @@ function animateHomelander(f,win){
       set('bip_spine_0_03',0,.15*strike,.12*strike);
       set('bip_spine_1_04',0,.28*strike,.1*strike);
       set('bip_hip_R_051',0,0,-.5*strike);
+    }else if(attack.type==='s'&&data.alternatingPunches){
+      const interval=Math.max(2,data.hitGap||3),active=attack.t>=data.s&&attack.t<=data.e,elapsed=Math.max(0,attack.t-data.s);
+      const nearPunch=Math.floor(elapsed/interval)%2===0,punch=active?Math.sin(Math.PI*(elapsed%interval)/Math.max(1,interval-1)):0;
+      const side=nearPunch?1:-1;
+      set('bip_spine_1_04',0,.32*punch*side,.08*punch);
+      set('bip_spine_2_05',0,.22*punch*side,0);
+      set('bip_hip_L_047',0,0,.24*punch*side);
+      set('bip_hip_R_051',0,0,-.24*punch*side);
+      set('Jaw_08',-.08*punch,0,0);
     }else if(attack.type==='s'){
       set('bip_upperArm_L_011',-1.3*strike,0,-1.05-.5*wind);
       set('bip_lowerArm_L_012',0,0,.35-.7*strike);
@@ -1333,6 +1348,13 @@ function targets(f,win){
       leg(n,H,S);leg(r,[-.1,-1,-.05],[-.15,-1,0]);arm(n,[-.2,-.8,.5],[.1,-.9,.6]);T.dip=.05;T.SP1=[.1-.35*k,1,0];T.SP2=[.1-.55*k,1,0]}
     else if(a.type==='h'){const w=clamp(t/d.s,0,1),sp=clamp((t-d.s)/(d.e-d.s+1),0,1);
       arm(n,bl(bl([.35,-.85,.1],[.2,-1,.1],w),[.35,-.4,.05],sp),bl(bl([.9,.45,0],[.4,-.8,0],w),[.2,1,0],sp));T.dip=.12*w*(1-sp)}
+    else if(a.type==='s'&&d.alternatingPunches){
+      const interval=Math.max(2,d.hitGap||3),active=t>=d.s&&t<=d.e,elapsed=Math.max(0,t-d.s);
+      const nearPunch=Math.floor(elapsed/interval)%2===0,punch=active?Math.sin(Math.PI*(elapsed%interval)/Math.max(1,interval-1)):0;
+      const nearGuard=[[.35,-.85,.1],[.9,.45,0]],farGuard=[[.1,-.9,.2],[.8,.7,-.1]];
+      if(nearPunch){arm(n,bl(nearGuard[0],[1,.12,.15],punch),bl(nearGuard[1],[1,.1,0],punch));arm(r,farGuard[0],farGuard[1])}
+      else{arm(n,nearGuard[0],nearGuard[1]);arm(r,bl(farGuard[0],[1,.12,.15],punch),bl(farGuard[1],[1,.1,0],punch))}
+      const side=nearPunch?1:-1;T.SP1=[.1+.2*punch,1,0];T.SP2=[.15+.3*punch*side,1,0];T.dip=.08*punch}
     else if(a.type==='s'){const e=clamp(t/d.s,0,1);
       arm(n,bl([.35,-.85,.1],[1,.1,.15],e),bl([.9,.45,0],[1,.1,0],e));arm(r,bl([.1,-.9,.2],[1,.1,.15],e),bl([.8,.7,-.1],[1,.1,0],e));
       leg(n,[.7,-.8,.05],[.1,-1,0]);leg(r,[-.7,-.8,-.05],[-.7,-1,0]);T.dip=.12}
@@ -1396,6 +1418,14 @@ function pose(f,win){
     else if(a.type==='h'){
       t.aN=mix(.7,-.55,2.9);t.eN=mix(1.9,.5,.15);t.hy=-.03-.16*W*(1-S)+.1*S;t.lN=mix(.32,.8,.5);t.kN=mix(-.5,-1.2,-.3);
       t.tw=.5*S-.2*W;t.lean=-.06+.1*W-.14*S;t.head=-.08+.25*S}
+    else if(a.type==='s'&&d.alternatingPunches){
+      const interval=Math.max(2,d.hitGap||3),active=tt>=d.s&&tt<=d.e,elapsed=Math.max(0,tt-d.s);
+      const nearPunch=Math.floor(elapsed/interval)%2===0;
+      const punch=active?Math.sin(Math.PI*(elapsed%interval)/Math.max(1,interval-1)):0;
+      t.aN=nearPunch?lerp(.7,.12,punch):.7;t.eN=nearPunch?lerp(1.9,2.1,punch):1.9;
+      t.aF=nearPunch?.55:lerp(.45,.1,punch);t.eF=nearPunch?1.8:lerp(2,2.1,punch);
+      t.lean=-.06-.14*punch;t.tw=(nearPunch?1:-1)*.38*punch;t.hipTw=(nearPunch?1:-1)*.2*punch;
+      t.hy=-.03+.025*punch;t.lN=.32+.1*punch;t.lF=-.28-.1*punch}
     else if(a.type==='s'){
       t.aN=mix(.7,.2,1.6);t.eN=mix(1.9,2.2,.1);t.aF=mix(.45,.2,1.5);t.eF=mix(2,2.2,.1);t.lean=-.06-.2*S;
       t.lN=mix(.32,.2,.9);t.lF=-.28-.7*S;t.hy=-.03-.08*S;t.tw=.2*S}

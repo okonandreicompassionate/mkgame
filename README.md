@@ -8,7 +8,7 @@ Online controls are relayed immediately, quick taps are buffered until the next 
 
 A-Train moves at 2x normal speed and can trigger a 1.5-second, 2.2x Speed Burst on `R` (also available as a touchscreen button), with a five-second cooldown. Each fighter's `E` special is individually tuned to its signature move; attack buttons trigger once per press rather than restarting while held.
 
-The roster includes PhaseShift's close-range Phase Dash and multi-hit Afterimage Flurry, plus Tidebreaker's water projectile and Tidal Crash. A-Train now wears blue and has a homing Speed Punch: block the first punch to cancel the rush; if it gets through, its follow-up punches cannot be blocked.
+The roster includes PhaseShift's close-range Phase Dash and multi-hit Afterimage Flurry, plus Tidebreaker's water projectile and Tidal Crash. A-Train now wears blue and has a close-range Speed Punch: one press automatically triggers eight alternating, low-damage punches. Block the first punch to cancel the flurry; later punches cannot be blocked.
 
 Choose from five arenas: the neon rooftop, sunset harbor, a stone colosseum, a frozen outpost, and an orbital platform. Blocking now cuts chip damage and adds recovery to attacks it stops, making repeated attacks riskier. Grounded uppercuts can catch nearby airborne fighters, and flight is capped lower to keep non-flying fighters in range.
 
