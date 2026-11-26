@@ -6,7 +6,7 @@ The Node server hosts the game files and relays room messages over WebSockets. T
 
 Online controls are relayed immediately, quick taps are buffered until the next game tick, and the host sends 30 state updates per second. Old snapshots are dropped when a connection falls behind, rather than queued and shown late. The HUD shows the server round-trip time, and online result messages and score labels identify each player's perspective. These changes avoid avoidable server-side queuing; they cannot eliminate delay caused by distance, poor connections, or the host computer.
 
-A-Train has faster normal movement and a temporary Speed Burst on `R` (also available as a touchscreen button), with a cooldown meter.
+A-Train moves at 2x normal speed and can trigger a 1.5-second, 2.2x Speed Burst on `R` (also available as a touchscreen button), with a five-second cooldown. Each fighter's `E` special is individually tuned to its signature move; attack buttons trigger once per press rather than restarting while held.
 
 ### Run locally
 
