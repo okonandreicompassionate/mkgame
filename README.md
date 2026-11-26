@@ -10,7 +10,7 @@ A-Train moves at 2x normal speed and can trigger a 1.5-second, 2.2x Speed Burst 
 
 The roster includes PhaseShift's close-range Phase Dash and multi-hit Afterimage Flurry, plus Tidebreaker's water projectile and Tidal Crash. A-Train now wears blue and has a close-range Speed Punch: one press automatically triggers eight alternating, low-damage punches. Block the first punch to cancel the flurry; later punches cannot be blocked.
 
-Choose from five arenas: the neon rooftop, sunset harbor, a stone colosseum, a frozen outpost, and an orbital platform. Blocking now cuts chip damage and adds recovery to attacks it stops, making repeated attacks riskier. Grounded uppercuts can catch nearby airborne fighters, and flight is capped lower to keep non-flying fighters in range.
+Choose from five arenas: the neon rooftop, sunset harbor, a stone colosseum, a frozen outpost, and an orbital platform. Fighters start with 120 health, and the HUD bars animate damage smoothly. Blocking cuts chip damage and adds recovery to attacks it stops, making repeated attacks riskier. Grounded uppercuts can catch nearby airborne fighters, and flight is capped lower to keep non-flying fighters in range.
 
 Online movement is screen-relative on both computers: `A`/left arrow always moves left and `D`/right arrow always moves right. Movement and attack recovery are faster, punches extend straight toward the opponent, and kicks snap forward from a raised knee—even in flight. A follow-up press during a strike can chain into the next move after a hit.
 

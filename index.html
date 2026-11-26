@@ -14,7 +14,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
 .side{flex:1;max-width:430px}.r{text-align:right}
 .nm{font-weight:800;font-size:13px;letter-spacing:.16em;text-shadow:0 2px 6px #000}
 .bar{height:20px;border:2px solid rgba(255,255,255,.75);transform:skewX(-14deg);background:rgba(0,0,0,.55);overflow:hidden;margin:3px 6px}
-.fill{height:100%;width:100%;background:linear-gradient(90deg,#e0b43a,#d62a3a);transition:width .1s}
+.fill{height:100%;width:100%;background:linear-gradient(90deg,#e0b43a,#d62a3a);transition:width .25s linear}
 .r .fill{margin-left:auto;background:linear-gradient(270deg,#44ddff,#6a4cff)}
 .pips span{display:inline-block;width:11px;height:11px;border-radius:50%;background:rgba(255,255,255,.2);margin:2px 3px}
 .pips span.on{background:#e0b43a;box-shadow:0 0 8px #e0b43a}
@@ -736,7 +736,8 @@ function clearBlood(){
   for(const m of bloodStains)m.visible=false;
   bloodStainCursor=0;for(const m of cracks)m.visible=false;
 }
-function mk(x,face,m,cfg){const noseBlood=new THREE.Sprite(noseBloodMat);noseBlood.scale.set(.055,.105,1);noseBlood.visible=false;S.add(noseBlood);m.bloodNose=noseBlood;const aura=new THREE.Sprite(new THREE.SpriteMaterial({map:dotTex,color:cfg.acc||cfg.eye,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,opacity:0}));aura.scale.set(3.6,4.6,1);S.add(aura);m.aura=aura;return{x,y:0,vx:0,vy:0,face,hp:100,atk:null,bufferedAttack:null,bleedT:0,cd:0,lcd:0,flightT:FLIGHT_TIME,flightCd:0,speedBoostT:0,speedBoostCd:0,rp:false,block:false,hit:0,wins:0,koT:0,sp:0,cmb:0,cmbT:0,hurtT:0,gb:0,hz:'',altp:false,inputHeld:{},sq:0,land:0,tair:0,kdT:0,bn:0,getup:0,fly:false,down:false,landed:false,ip:false,m,cfg,z:face>0?.1:-.1}}
+const MAX_HEALTH=120;
+function mk(x,face,m,cfg){const noseBlood=new THREE.Sprite(noseBloodMat);noseBlood.scale.set(.055,.105,1);noseBlood.visible=false;S.add(noseBlood);m.bloodNose=noseBlood;const aura=new THREE.Sprite(new THREE.SpriteMaterial({map:dotTex,color:cfg.acc||cfg.eye,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,opacity:0}));aura.scale.set(3.6,4.6,1);S.add(aura);m.aura=aura;return{x,y:0,vx:0,vy:0,face,hp:MAX_HEALTH,atk:null,bufferedAttack:null,bleedT:0,cd:0,lcd:0,flightT:FLIGHT_TIME,flightCd:0,speedBoostT:0,speedBoostCd:0,rp:false,block:false,hit:0,wins:0,koT:0,sp:0,cmb:0,cmbT:0,hurtT:0,gb:0,hz:'',altp:false,inputHeld:{},sq:0,land:0,tair:0,kdT:0,bn:0,getup:0,fly:false,down:false,landed:false,ip:false,m,cfg,z:face>0?.1:-.1}}
 let first=true,pw=0,bw=0,pick=0,opp=1,mStep=0,mIdx=0;
 const STG=[['ROOFTOP','Neon skyline, night'],['NEON HARBOR','Dockside at dusk'],['SUNSET COLOSSEUM','Ancient stone arena'],['ARCTIC OUTPOST','Frozen peaks and ice'],['ORBITAL PLATFORM','Deep-space battleground']];
 const INPUT_KEYS=['a','d','w','j','k','l','u','o','e','i','r'];
@@ -1541,7 +1542,7 @@ function hud(){
   setX('cb',cc?cc.cmb+' HIT COMBO':'');setC('cb',cc===B?'r':'');
   setS('sm','width',(P.sp|0)+'%');setC('ko',state==='ko'&&stT>12&&(P.hp<=0||B.hp<=0)?'on':'');
   setS('fl','opacity',flv<.01?'0':flv.toFixed(2));flv*=.86;
-  setS('h1','width',P.hp.toFixed(1)+'%');setS('h2','width',B.hp.toFixed(1)+'%');setX('tm',Math.max(0,timer));
+  setS('h1','width',Math.max(0,Math.min(100,P.hp/MAX_HEALTH*100)).toFixed(1)+'%');setS('h2','width',Math.max(0,Math.min(100,B.hp/MAX_HEALTH*100)).toFixed(1)+'%');setX('tm',Math.max(0,timer));
   const pk=P.wins+'|'+B.wins;if(hc.pips!==pk){hc.pips=pk;
     [...$('p1').children].forEach((x,i)=>x.classList.toggle('on',i<P.wins));[...$('p2').children].forEach((x,i)=>x.classList.toggle('on',i<B.wins))}
   setS('lz','width',((100*(1-P.lcd/(P.cfg.lCd||110)))|0)+'%');setS('msg','color',/FATALITY|FINISH/.test(msg)?'#d0001e':'');
