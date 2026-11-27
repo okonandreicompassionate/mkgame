@@ -2090,5 +2090,85 @@ const _nr2=newRound;newRound=function(){_nr2();for(const f of[P,B]){f.spinA=0;f.
 const _h3=hud;hud=function(){_h3();vfxTick()};
 })();
 </script>
+
+
+<script>
+/* ===== REALISTIC SOUND PATCH (paste as the LAST <script>, right before </body>) ===== */
+(()=>{
+let cur=null,ht='p',inten=1;
+const ARCS={homelander:'sun',superman:'sun',solar:'sun',maeve:'sun',ironman:'tech',bot:'tech',omni:'heavy',soldier:'heavy',brute:'heavy',flash:'bolt',atrain:'bolt',storm:'bolt',thunder:'bolt',crimson:'fire',inferno:'fire',frost:'ice',tidebreaker:'ice',bloodlord:'blood',noir:'shadow',darkknight:'shadow',phaseshift:'shadow',webslinger:'shadow',feral:'claw'};
+const A=()=>(cur&&ARCS[cur.cfg.id])||'sun',R=()=>.92+Math.random()*.16;
+// energy blasts: every hero archetype gets its own voice
+function blast(t,big){const a=A(),r=R(),v=big?1.25:1;
+ tone(t,.3,{f0:95*r,f1:30,v:.9*v,rv:.25}); // pressure thump
+ if(a==='bolt'){nz(t,.45,{f0:6000,f1:900,type:'highpass',q:.7,v:.7*v,dec:1.2,rv:.2});for(let i=0;i<7;i++)nz(t+i*.045+Math.random()*.02,.03,{f0:5000,f1:1500,type:'bandpass',q:3,v:.55,dec:1});tone(t,.5,{f0:1200,f1:140,type:'square',v:.16,att:.002});nz(t+.12,.6,{f0:500,f1:60,v:.7*v,dec:1.5,rv:.5})}
+ else if(a==='fire'){nz(t,.7,{f0:1800,f1:200,v:1*v,dec:.8,att:.04,rv:.3});nz(t+.05,.5,{f0:900,f1:140,type:'bandpass',q:.8,v:.6,dec:1,att:.08});tone(t,.6,{f0:70,f1:45,type:'sawtooth',v:.25,att:.03})}
+ else if(a==='ice'){for(let i=0;i<5;i++)tone(t+i*.035,.35,{f0:2600+i*420,f1:2200+i*300,v:.15,rv:.5});nz(t,.35,{f0:9000,f1:3000,type:'highpass',v:.5*v,dec:1.5});nz(t,.3,{f0:1400,f1:200,v:.5,dec:1.5})}
+ else if(a==='heavy'){tone(t,.6,{f0:70*r,f1:22,v:1.3*v,rv:.4});nz(t,.5,{f0:1400,f1:60,v:1.1*v,dec:1.4,rv:.35});nz(t,.03,{f0:7000,f1:2000,type:'highpass',v:.7})}
+ else if(a==='shadow'||a==='claw'){nz(t,.14,{f0:2500,f1:9000,type:'bandpass',q:2,v:.7,dec:.6,att:.02});tone(t,.3,{f0:3400,f1:3000,v:.12,rv:.3});tone(t+.01,.35,{f0:5100,f1:4700,v:.08,rv:.3});nz(t,.2,{f0:900,f1:200,v:.5,dec:2})}
+ else if(a==='blood'){nz(t,.4,{f0:1400,f1:200,type:'bandpass',q:1.6,v:.8,dec:1.2});tone(t,.4,{f0:120,f1:50,type:'sawtooth',v:.25,att:.02});nz(t+.08,.3,{f0:2500,f1:500,type:'bandpass',q:4,v:.35,dec:1})}
+ else{tone(t,.2,{f0:180,f1:900,v:.2,att:.12});nz(t+.1,.6,{f0:7000,f1:2500,type:'highpass',v:.6*v,dec:.5,att:.03});tone(t+.1,.55,{f0:340,f1:1700,type:'sawtooth',v:.2,att:.02,rv:.2});tone(t+.1,.55,{f0:170,f1:850,type:'square',v:.1,att:.02});nz(t+.1,.5,{f0:600,f1:120,v:.6,dec:1.2,rv:.3})}
+}
+const _old=sfx;
+sfx=function(k){
+ if(!actx||mvol<=0)return;
+ if(k==='select'||k==='round')return _old(k);
+ const t=actx.currentTime,r=R();
+ switch(k){
+ case'swing': // punch / kick / dash air movement
+  nz(t,.14,{f0:350*r,f1:1900*r,type:'bandpass',q:.9,v:.32,dec:.6,att:.045});break;
+ case'hit':{ // flesh impact: click + slap + body thump (kicks are deeper, uppercuts crunch)
+  const kk=ht==='k',up=ht==='h';
+  nz(t,.012,{f0:8000,f1:3000,type:'highpass',v:.5});
+  nz(t,.07,{f0:(kk?1800:2600)*r,f1:350,type:'bandpass',q:1.2,v:.85,dec:2.5});
+  tone(t,kk?.17:.12,{f0:(kk?130:180)*r,f1:kk?42:55,v:1,rv:.08});
+  if(up)nz(t+.01,.1,{f0:1200,f1:200,v:.6,dec:2});
+  if(ht==='l')nz(t,.12,{f0:6000,f1:1500,type:'highpass',v:.4,dec:1.5});
+  break}
+ case'hithv': // heavy hit: boom + crunch + bone crack
+  nz(t,.015,{f0:9000,f1:3000,type:'highpass',v:.6});
+  nz(t,.22,{f0:2800*r,f1:120,v:1,dec:2,rv:.2});
+  tone(t,.4,{f0:100*r,f1:26,v:1.25,rv:.3});
+  tone(t+.02,.18,{f0:260,f1:70,type:'triangle',v:.5});
+  nz(t+.03,.1,{f0:3500,f1:900,type:'bandpass',q:3,v:.45,dec:1.5});break;
+ case'block':
+  nz(t,.06,{f0:1100*r,f1:300,type:'bandpass',q:2,v:.6,dec:2});tone(t,.1,{f0:200*r,f1:90,type:'triangle',v:.55});nz(t,.01,{f0:5000,f1:2500,type:'highpass',v:.3});break;
+ case'thud': // body hits the floor
+  tone(t,.35,{f0:75*r,f1:26,v:1.1,rv:.15});nz(t,.28,{f0:900,f1:70,v:.8,dec:2.2});nz(t+.04,.2,{f0:2500,f1:400,type:'bandpass',q:1,v:.25,dec:2});break;
+ case'land': // boots land after a jump (scales with fall speed)
+  tone(t,.14,{f0:120*r,f1:45,v:.7*inten});nz(t,.1,{f0:1400,f1:200,v:.5*inten,dec:2});nz(t+.01,.08,{f0:3500,f1:900,type:'bandpass',q:1,v:.2*inten});break;
+ case'jump': // push-off scuff + rising air
+  nz(t,.05,{f0:3000,f1:800,type:'bandpass',q:1,v:.25});nz(t+.02,.22,{f0:300,f1:1400,type:'bandpass',q:.8,v:.25,dec:.8,att:.07});break;
+ case'step': // footstep on concrete
+  tone(t,.05,{f0:100*r,f1:55,v:.22});nz(t,.05,{f0:1500,f1:300,v:.18,dec:2});break;
+ case'fly':
+  if(cur&&cur.fly){ // take-off: pressure thump, engine-like rumble, rising air blast
+   tone(t,.45,{f0:55,f1:130,v:.9,att:.04,rv:.2});
+   nz(t,.7,{f0:250,f1:1800,type:'bandpass',q:.7,v:.7,dec:.7,att:.12,rv:.2});
+   nz(t,.1,{f0:900,f1:200,v:.5,dec:2});
+   nz(t+.05,.5,{f0:2400,f1:500,type:'highpass',v:.25,dec:1})
+  }else nz(t,.5,{f0:1500,f1:250,type:'bandpass',q:.8,v:.5,dec:.7,att:.08});
+  break;
+ case'laser':blast(t,false);break;
+ case'special':blast(t,true);nz(t,.5,{f0:200,f1:2600,type:'bandpass',q:1,v:.5,dec:.8,att:.18,rv:.3});break;
+ case'ko':
+  nz(t,.015,{f0:8000,f1:2500,type:'highpass',v:.7});tone(t,1,{f0:70,f1:20,v:1.3,rv:.4});nz(t,.9,{f0:1400,f1:50,v:1,dec:1.4,rv:.5});nz(t+.05,.15,{f0:3500,f1:800,type:'bandpass',q:3,v:.5,dec:1.5});break;
+ default:return _old(k);
+ }
+ if(typeof wet==='function'&&(k==='hit'||k==='hithv'||k==='ko'))wet(k==='hit'?0:k==='hithv'?1:2); // keep gore squelch
+};
+// triggers: landings, take-offs, footsteps, who-is-hitting
+const _s=step;
+step=function(f,o,inp){cur=f;const y0=f.y,vy0=f.vy;_s(f,o,inp);
+ if(state==='fight'){
+  if(y0>.06&&f.y<=0&&vy0<-.1&&!f.fly&&!f.down){inten=Math.min(1.4,-vy0*5);sfx('land')}
+  if(y0<=.001&&f.vy>.12&&!f.fly&&!f.down&&!(f.hit>0))sfx('jump');
+  if(f.y<=0&&!f.fly&&!f.down&&!(f.hit>0)&&Math.abs(f.vx)>.025){f._fd=(f._fd||0)+Math.abs(f.vx);if(f._fd>.5){f._fd=0;sfx('step')}}
+ }
+};
+const _h=hurt;
+hurt=function(a,d,dmg,kb,up,zone){ht=(a.atk&&a.atk.type)||'p';cur=a;return _h.apply(this,arguments)};
+})();
+</script>
 </body>
 </html>
