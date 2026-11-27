@@ -1,33 +1,8 @@
-# HOMELANDER 3D: Rooftop Fight
-
-## Play online
-
-The Node server hosts the game files and relays room messages over WebSockets. The player who creates the room runs the existing game simulation; the other player's controls are sent to that host, and the host streams the live game state back. Combat rules stay in the browser game.
-
-Online controls are relayed immediately, quick taps are buffered until the next game tick, and the host sends 30 state updates per second. Old snapshots are dropped when a connection falls behind, rather than queued and shown late. The HUD shows the server round-trip time, and online result messages and score labels identify each player's perspective. These changes avoid avoidable server-side queuing; they cannot eliminate delay caused by distance, poor connections, or the host computer.
-
-A-Train moves at 2x normal speed and can trigger a 1.5-second, 2.2x Speed Burst on `R` (also available as a touchscreen button), with a five-second cooldown. Each fighter's `E` special is individually tuned to its signature move; attack buttons trigger once per press rather than restarting while held.
-
-The roster includes PhaseShift's close-range Phase Dash and multi-hit Afterimage Flurry, plus Tidebreaker's water projectile and Tidal Crash. A-Train now wears blue and has a close-range Speed Punch: one press automatically triggers eight alternating, low-damage punches. Block the first punch to cancel the flurry; later punches cannot be blocked.
-
-Choose from five arenas: the neon rooftop, sunset harbor, a stone colosseum, a frozen outpost, and an orbital platform. Fighters start with 120 health, and the HUD bars animate damage smoothly. Blocking cuts chip damage and adds recovery to attacks it stops, making repeated attacks riskier. Grounded uppercuts can catch nearby airborne fighters, and flight is capped lower to keep non-flying fighters in range.
-
-Online movement is screen-relative on both computers: `A`/left arrow always moves left and `D`/right arrow always moves right. Movement and attack recovery are faster, punches extend straight toward the opponent, and kicks snap forward from a raised knee—even in flight. A follow-up press during a strike can chain into the next move after a hit.
-
-Fly-capable heroes can fly for up to 10 seconds, followed by a 10-second cooldown; the HUD shows flight fuel and recharge. Homelander has faster aerial movement, and `U` targets an opponent below with downward Heat Vision when he is flying above them. The camera pulls back smoothly as either fighter rises and returns to its normal framing near the ground. Hits produce stylized blood droplets and rooftop marks; high hits can also cause a temporary nosebleed.
-
-On mobile, use the on-screen controls. The layout and camera resize when the device rotates, with a compact landscape layout; portrait remains supported.
-
-### Run locally
-
-1. Install Node.js.
-2. Run `npm install`, then `npm start`.
-3. Open `http://localhost:3000` and choose **Create online room**.
-4. To play from another computer on your home network, open the same address using the host computer's local IP address and join with the room code.
-
-### Host over the internet
-
-Deploy this folder as a Node web service (the included `render.yaml` can be used as a Render blueprint). Once deployed, both players open the service's HTTPS URL, then one creates a room and shares the six-character code. The other player joins with that code.
-
-The server must support WebSocket upgrades at `/ws`. HTTPS deployments use secure WebSockets automatically.
-"# mkgame" 
+# Run locally
+    cd game
+    python3 -m http.server 8080      # any static server works; file:// will NOT load the GLB
+Open http://localhost:8080 . Pick stage 3 (RUINED TEMPLE). Local game works as before; online rooms still need your own /ws server.
+# Assets and licences
+- assets/sponza.glb: Sponza, KhronosGroup/glTF-Sample-Assets, (c) Crytek; dual-licensed Cryengine Limited License + CC-BY 4.0. Textures downsized to 1024 webp (17.8 MB). Credit Crytek/Frank Meinl. Check the Cryengine licence before commercial use.
+- assets/*.hdr: Poly Haven HDRIs (CC0) as shipped in the three.js r128 repo (MIT).
+- assets/js/*Loader.js: three.js r128 (MIT).
