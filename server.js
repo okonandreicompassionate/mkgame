@@ -122,10 +122,19 @@ function leaveRoom(socket) {
       controller.player = null;
       send(controller, { type: 'roomClosed' });
     }
+    if (room.guest) {
+      room.guest.room = null;
+      room.guest.role = null;
+      room.guest.player = null;
+      send(room.guest, { type: 'roomClosed' });
+    }
     rooms.delete(room.code);
   } else if (role === 'controller' && Number.isInteger(player)) {
     room.controllers[player - 1] = null;
     send(room.host, { type: 'controllerLeft', player });
+  } else if (role === 'guest' && room.guest === socket) {
+    room.guest = null;
+    send(room.host, { type: 'controllerLeft', player: 2 });
   }
 }
 
@@ -141,9 +150,9 @@ function routeMessage(socket, message) {
   if (type === 'create') {
     if (socket.room) leaveRoom(socket); // no more "already in a room" dead end
     if (rooms.size >= MAX_ROOMS) return sendError(socket, 'Server is busy. Try again shortly.');
-    const mode = message.mode === 'phone-bot' ? 'phone-bot' : 'duo';
-    const controllerLimit = mode === 'phone-bot' ? 1 : 2;
-    const room = { code: makeRoomCode(), host: socket, controllers: [null, null], mode, controllerLimit };
+    const mode = ['phone-bot', 'laptop-duo'].includes(message.mode) ? message.mode : 'duo';
+    const controllerLimit = mode === 'duo' ? 2 : 1;
+    const room = { code: makeRoomCode(), host: socket, controllers: [null, null], guest: null, mode, controllerLimit };
     rooms.set(room.code, room);
     socket.room = room;
     socket.role = 'host';
@@ -154,6 +163,9 @@ function routeMessage(socket, message) {
     const code = normalizeCode(message.code);
     const room = rooms.get(code);
     if (!room) return sendError(socket, 'Room not found. Check the code and try again.');
+    if (room.mode === 'laptop-duo') {
+      return sendError(socket, 'This room is for joining from another laptop.');
+    }
     if (socket.room === room) return; // already in this room
     const playerIndex = room.controllers.indexOf(null);
     if (playerIndex < 0 || playerIndex >= room.controllerLimit) {
@@ -171,6 +183,26 @@ function routeMessage(socket, message) {
     return;
   }
 
+  if (type === 'joinLaptop') {
+    const code = normalizeCode(message.code);
+    const room = rooms.get(code);
+    if (!room) return sendError(socket, 'Room not found. Check the code and try again.');
+    if (room.mode !== 'laptop-duo') {
+      return sendError(socket, 'This room is not set up for laptop-to-laptop play.');
+    }
+    if (room.guest && room.guest.readyState === WebSocket.OPEN) {
+      return sendError(socket, 'This room already has a second laptop connected.');
+    }
+    if (socket.room) leaveRoom(socket);
+    room.guest = socket;
+    socket.room = room;
+    socket.role = 'guest';
+    socket.player = 2;
+    send(socket, { type: 'joinedLaptop', code, mode: room.mode, player: 2 });
+    send(room.host, { type: 'laptopJoined', player: 2 });
+    return;
+  }
+
   if (type === 'leave') return leaveRoom(socket);
 
   const room = socket.room;
@@ -178,13 +210,28 @@ function routeMessage(socket, message) {
   const isHost = socket.role === 'host';
   const target = isHost ? null : room.host;
 
-  if (!isHost && socket.role === 'controller' && type === 'menuInput') {
+  if (!isHost && (socket.role === 'controller' || socket.role === 'guest') && type === 'menuInput') {
     const action = message.action;
-    if (!['left', 'right', 'confirm'].includes(action)) return;
-    return send(target, { type: 'menuInput', player: socket.player, action });
+    if (['left', 'right', 'confirm'].includes(action)) {
+      return send(target, { type: 'menuInput', player: socket.player, action });
+    }
+    if (
+      socket.role === 'guest' &&
+      action === 'select' &&
+      Number.isInteger(message.index) &&
+      message.index >= 0 &&
+      message.index < 64
+    ) {
+      return send(target, { type: 'menuInput', player: socket.player, action, index: message.index });
+    }
   }
 
-  if (!isHost && socket.role === 'controller' && type === 'input') {
+  if (!isHost && socket.role === 'guest' && room.mode === 'laptop-duo') {
+    if (type === 'pauseToggle') return send(room.host, { type: 'pauseToggle' });
+    if (type === 'restartRequest') return send(room.host, { type: 'restartRequest' });
+  }
+
+  if (!isHost && (socket.role === 'controller' || socket.role === 'guest') && type === 'input') {
     const input = message.input;
     if (!input || typeof input !== 'object' || Array.isArray(input)) return;
     const pressedIn = message.pressed && typeof message.pressed === 'object' ? message.pressed : null;
@@ -232,12 +279,38 @@ function routeMessage(socket, message) {
     for (const controller of room.controllers) {
       if (controller) send(controller, state);
     }
+    if (room.guest) send(room.guest, state);
     return;
+  }
+
+  if (isHost && type === 'snapshot') {
+    const snapshot = message.snapshot;
+    if (
+      room.mode !== 'laptop-duo' ||
+      !room.guest ||
+      !snapshot ||
+      typeof snapshot !== 'object' ||
+      Array.isArray(snapshot) ||
+      !['intro', 'fight', 'ko', 'match'].includes(snapshot.state) ||
+      !Number.isInteger(snapshot.frame) ||
+      !Array.isArray(snapshot.fighters) ||
+      snapshot.fighters.length !== 2 ||
+      Buffer.byteLength(JSON.stringify(snapshot)) > 12000 ||
+      room.guest.bufferedAmount > 8192
+    ) return;
+    return send(room.guest, { type: 'snapshot', snapshot });
   }
 
   if (isHost && (type === 'matchStart' || type === 'lobbyReset')) {
     for (const controller of room.controllers) {
       if (controller) send(controller, { type });
+    }
+    if (room.guest) {
+      if (type === 'matchStart' && message.match && typeof message.match === 'object') {
+        send(room.guest, { type, match: message.match });
+      } else {
+        send(room.guest, { type });
+      }
     }
   }
 }

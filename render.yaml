@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: homelander-rooftop-fight
+    name: fallen-angels
     runtime: node
     plan: free
     buildCommand: npm install

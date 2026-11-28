@@ -6,7 +6,7 @@
       name="viewport"
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
-    <title>HOMELANDER 3D: Rooftop Fight</title>
+    <title>Fallen Angels</title>
     <style>
       :root {
         box-sizing: border-box;
@@ -537,6 +537,9 @@
         justify-content: center;
         flex-wrap: wrap;
       }
+      #join-row[hidden] {
+        display: none;
+      }
       #room-code {
         font-size: 24px !important;
         font-weight: 900;
@@ -1056,17 +1059,23 @@
   <body>
     <div id="ko"></div>
     <div id="fl"></div>
-    <div id="asset-status" role="status">LOADING HOMELANDER RIG…</div>
+    <div id="asset-status" role="status">LOADING FIGHTERS…</div>
     <div id="home">
-      <h2>HOMELANDER 3D</h2>
+      <h2>FALLEN ANGELS</h2>
       <p>
-        Play locally, use one phone against the computer, or connect two phones
-        as controllers.
+        Play locally, connect two laptops online, or use phone controllers.
       </p>
-      <button id="solo-game">LOCAL GAME</button>
+      <button id="solo-game">LOCAL VS COMPUTER</button>
+      <button id="local-two-player">LOCAL 2 PLAYERS · ONE LAPTOP</button>
+      <button id="create-laptop-room">CREATE ONLINE ROOM · 2 LAPTOPS</button>
+      <button id="show-laptop-join">JOIN ONLINE ROOM · THIS LAPTOP</button>
+      <div id="join-row" hidden>
+        <input id="laptop-room-code" aria-label="Online room code" maxlength="6" placeholder="ROOM CODE">
+        <button id="join-laptop-room">JOIN ROOM</button>
+      </div>
       <button id="phone-bot-game">PHONE VS COMPUTER</button>
-      <button id="create-room">CREATE GAME</button>
-      <button id="join-game">JOIN GAME · PHONE CONTROLLER</button>
+      <button id="create-room">CREATE PHONE ROOM · 2 PHONES</button>
+      <button id="join-game">JOIN AS PHONE CONTROLLER</button>
       <p id="room-code" hidden></p>
       <p id="controller-invite" hidden></p>
       <button id="copy-room" hidden>COPY CONTROLLER LINK</button>
@@ -1200,6 +1209,7 @@
     <script>
       const $ = (id) => document.getElementById(id);
       const keys = {},
+        p2Keys = {},
         kmap = {
           ArrowLeft: "a",
           ArrowRight: "d",
@@ -1208,6 +1218,19 @@
           s: "l",
           ArrowDown: "l",
         };
+      const p2Keymap = {
+        ArrowLeft: "a",
+        ArrowRight: "d",
+        ArrowUp: "w",
+        ArrowDown: "l",
+        "1": "j",
+        "2": "k",
+        "3": "u",
+        "4": "e",
+        "5": "o",
+        "6": "r",
+        "7": "i",
+      };
       function closeHeroHelp() {
         $("hero-help-modal").style.display = "none";
       }
@@ -1219,13 +1242,46 @@
         ).join("") + '<b class="kot">K.O.</b>';
       addEventListener("keydown", (e) => {
         const k = kmap[e.key] || e.key.toLowerCase();
+        if (localTwoPlayer && state === "select" && mStep === 1) {
+          if (e.key === "ArrowLeft") menuMove(-1);
+          else if (e.key === "ArrowRight") menuMove(1);
+          else if (e.key === "1") menuOk();
+          if (
+            e.key === "ArrowLeft" ||
+            e.key === "ArrowRight" ||
+            e.key === "1"
+          ) {
+            e.preventDefault();
+            return;
+          }
+        }
+        if (localTwoPlayer && p2Keymap[e.key]) {
+          p2Keys[p2Keymap[e.key]] = true;
+          e.preventDefault();
+          return;
+        }
         if ($("hero-help-modal").style.display === "flex") {
           if (e.key === "Escape") closeHeroHelp();
           e.preventDefault();
           return;
         }
         if (state === "select") {
-          if (networkRole === "host") {
+          if (networkRole === "guest") {
+            if (mStep === 1) {
+              if (k === "a") netSend({ type: "menuInput", action: "left" });
+              else if (k === "d")
+                netSend({ type: "menuInput", action: "right" });
+              else if (k === "enter" || k === "j" || e.key === " ")
+                netSend({ type: "menuInput", action: "confirm" });
+            }
+            e.preventDefault();
+            return;
+          }
+          if (
+            networkRole === "host" &&
+            (networkMode !== "laptop-duo" ||
+              (mStep !== 0 && !isStageSelectionStep()))
+          ) {
             e.preventDefault();
             return;
           }
@@ -1237,19 +1293,24 @@
         }
         const wasDown = !!keys[k];
         keys[k] = true;
-        if (k === "enter" && (!networkRole || state === "match")) restart();
+        if (k === "enter" && (!networkRole || state === "match")) {
+          if (networkRole === "guest")
+            netSend({ type: "restartRequest" });
+          else restart();
+        }
         if (kmap[e.key]) e.preventDefault();
       });
       addEventListener("keydown", (e) => {
         if ($("hero-help-modal").style.display === "flex") return;
         const k = e.key.toLowerCase();
-        if (
-          (k === "p" || k === "escape") &&
-          state === "fight"
-        ) {
-          paused = !paused;
-          msg = paused ? "PAUSED" : "";
-          sub = paused ? "Press P to resume" : "";
+        if ((k === "p" || k === "escape") && state === "fight" && !e.repeat) {
+          if (networkRole === "guest") {
+            netSend({ type: "pauseToggle" });
+          } else {
+            paused = !paused;
+            msg = paused ? "PAUSED" : "FIGHT!";
+            sub = paused ? "Press P or Esc to resume" : "";
+          }
         }
         if (k === "m") {
           mvol = mvol > 0 ? 0 : 0.55;
@@ -1259,10 +1320,14 @@
       });
       addEventListener("blur", () => {
         for (const k in keys) keys[k] = false;
+        for (const k in p2Keys) p2Keys[k] = false;
       });
       addEventListener("contextmenu", (e) => e.preventDefault());
       addEventListener("keyup", (e) => {
-        keys[kmap[e.key] || e.key.toLowerCase()] = false;
+        const k = kmap[e.key] || e.key.toLowerCase();
+        keys[k] = false;
+        const p2Key = p2Keymap[e.key];
+        if (p2Key) p2Keys[p2Key] = false;
       });
       document.querySelectorAll(".pad button").forEach((b) => {
         const k = b.dataset.k;
@@ -4941,6 +5006,7 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
         controllerSlots = [false, false],
         networkMode = "duo",
         networkControllerLimit = 2,
+        localTwoPlayer = false,
         onlineHostCharacter = null,
         onlineGuestCharacter = null,
         onlineStage = null,
@@ -4951,7 +5017,10 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
         networkRtt = null,
         networkPingId = 0,
         networkPingSentAt = 0,
-        networkLastPongFrame = 0;
+        networkLastPongFrame = 0,
+        guestLastInput = {},
+        guestSnapshotPrevious = null,
+        guestSnapshotCurrent = null;
       let mvT = 0,
         mvName = "",
         koA = 0,
@@ -5350,21 +5419,23 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
               shockwave(sx, s.p.col, 0.5);
               s.l = 0;
             }
-            for (let j = 0; j < shots.length; j++) {
-              const q = shots[j];
-              if (
-                q !== s &&
-                q.f !== s.f &&
-                q.l > 0 &&
-                Math.abs(q.spr.position.x - sx) < 0.5 &&
-                Math.abs(q.spr.position.y - sy) < 0.8
-              ) {
-                fx(sx, sy, 0xffffff, 2);
-                flash(0.4);
-                shockwave(sx, 0xffffff, 0.8);
-                sfx("hithv");
-                s.l = 0;
-                q.l = 0;
+            if (networkRole !== "guest") {
+              for (let j = 0; j < shots.length; j++) {
+                const q = shots[j];
+                if (
+                  q !== s &&
+                  q.f !== s.f &&
+                  q.l > 0 &&
+                  Math.abs(q.spr.position.x - sx) < 0.5 &&
+                  Math.abs(q.spr.position.y - sy) < 0.8
+                ) {
+                  fx(sx, sy, 0xffffff, 2);
+                  flash(0.4);
+                  shockwave(sx, 0xffffff, 0.8);
+                  sfx("hithv");
+                  s.l = 0;
+                  q.l = 0;
+                }
               }
             }
             if (Math.abs(sx) > 9) s.l = 0;
@@ -5643,7 +5714,26 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
         $("home-error").textContent = text || "";
       }
       function connectedControllerCount() {
+        if (networkMode === "laptop-duo")
+          return controllerSlots[1] ? 1 : 0;
         return controllerSlots.filter(Boolean).length;
+      }
+      function roomConnectionBadge() {
+        const peerName =
+          networkMode === "laptop-duo"
+            ? "remote laptop"
+            : "phone controller" + (networkControllerLimit === 1 ? "" : "s");
+        return (
+          "ROOM " +
+          roomCode +
+          " · " +
+          connectedControllerCount() +
+          "/" +
+          networkControllerLimit +
+          " " +
+          peerName +
+          " connected"
+        );
       }
       function showHome(error) {
         $("home").style.display = "flex";
@@ -5658,6 +5748,9 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
         remoteInputs = [{}, {}];
         remotePresseds = [{}, {}];
         networkPausedForDisconnect = false;
+        guestLastInput = {};
+        guestSnapshotPrevious = null;
+        guestSnapshotCurrent = null;
       }
       function connectOnline(role, code, mode = "duo") {
         if (location.protocol === "file:") {
@@ -5679,9 +5772,14 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
               role === "host"
                 ? {
                     type: "create",
-                    mode: mode === "phone-bot" ? "phone-bot" : "duo",
+                    mode:
+                      mode === "phone-bot" || mode === "laptop-duo"
+                        ? mode
+                        : "duo",
                   }
-                : { type: "join", code },
+                : role === "guest"
+                  ? { type: "joinLaptop", code }
+                  : { type: "join", code },
             );
         });
         connection.addEventListener("message", (event) => {
@@ -5704,7 +5802,11 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
           if (message.type === "created") {
             networkRole = role;
             networkMode =
-              message.mode === "phone-bot" ? "phone-bot" : "duo";
+              message.mode === "laptop-duo"
+                ? "laptop-duo"
+                : message.mode === "phone-bot"
+                  ? "phone-bot"
+                  : "duo";
             networkControllerLimit =
               message.controllerLimit === 1 ? 1 : 2;
             roomCode = message.code;
@@ -5712,8 +5814,13 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
               ? message.controllers.map(Boolean).slice(0, 2)
               : [false, false];
             while (controllerSlots.length < 2) controllerSlots.push(false);
-            const invite = new URL("/controller", location.href);
-            invite.searchParams.set("room", roomCode);
+            const invite = new URL(location.href);
+            if (networkMode === "laptop-duo") {
+              invite.searchParams.set("join", roomCode);
+            } else {
+              invite.pathname = "/controller";
+              invite.searchParams.set("room", roomCode);
+            }
             controllerLink = invite.href;
             resetOnlineSelection();
             setHomeError("");
@@ -5722,17 +5829,41 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
             networkPingId = 0;
             $("room-code").textContent = "ROOM " + roomCode;
             $("room-code").hidden = false;
-            $("controller-invite").textContent =
-              (networkMode === "phone-bot"
-                ? "On your phone, open "
-                : "On both phones, open ") + controllerLink;
+            $("controller-invite").textContent = (
+              networkMode === "laptop-duo"
+                ? "On the other laptop, open "
+                : networkMode === "phone-bot"
+                  ? "On your phone, open "
+                  : "On both phones, open "
+            ) + controllerLink;
             $("controller-invite").hidden = false;
             $("copy-room").hidden = false;
+            $("copy-room").textContent =
+              networkMode === "laptop-duo" ? "COPY JOIN LINK" : "COPY CONTROLLER LINK";
+            $("copy-menu-room").textContent =
+              networkMode === "laptop-duo" ? "COPY JOIN LINK" : "COPY CONTROLLER LINK";
             $("home").style.display = "none";
             openMenu();
             return;
           }
-          if (message.type === "controllerJoined") {
+          if (message.type === "joinedLaptop") {
+            networkRole = "guest";
+            networkMode = "laptop-duo";
+            networkControllerLimit = 1;
+            roomCode = message.code;
+            controllerSlots = [false, true];
+            resetOnlineSelection();
+            networkRtt = null;
+            networkLastPongFrame = frame;
+            networkPingId = 0;
+            $("home").style.display = "none";
+            openMenu();
+            return;
+          }
+          if (
+            message.type === "controllerJoined" ||
+            message.type === "laptopJoined"
+          ) {
             const player = Number(message.player);
             if (Number.isInteger(player) && player >= 1 && player <= 2)
               controllerSlots[player - 1] = true;
@@ -5750,16 +5881,25 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
               sub = "";
               networkPausedForDisconnect = false;
             }
-            $("room-badge").textContent =
-              "ROOM " +
-              roomCode +
-              " · " +
-              connectedControllerCount() +
-              "/" +
-              networkControllerLimit +
-              " phone controller" +
-              (networkControllerLimit === 1 ? "" : "s") +
-              " connected";
+            $("room-badge").textContent = roomConnectionBadge();
+            if (
+              message.type === "laptopJoined" &&
+              networkRole === "host" &&
+              networkMode === "laptop-duo" &&
+              state !== "select" &&
+              onlineHostCharacter !== null &&
+              onlineGuestCharacter !== null &&
+              onlineStage !== null
+            ) {
+              netSend({
+                type: "matchStart",
+                match: {
+                  host: onlineHostCharacter,
+                  guest: onlineGuestCharacter,
+                  stage: onlineStage,
+                },
+              });
+            }
             maybeStartOnlineMatch();
             return;
           }
@@ -5773,22 +5913,14 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
                 paused = true;
                 networkPausedForDisconnect = true;
                 msg = "PLAYER " + player + " DISCONNECTED";
-                sub =
-                  networkControllerLimit === 1
+                sub = networkMode === "laptop-duo"
+                  ? "Reconnect the other laptop to continue"
+                  : networkControllerLimit === 1
                     ? "Reconnect the phone controller to continue"
                     : "Reconnect both phone controllers to continue";
               }
             }
-            $("room-badge").textContent =
-              "ROOM " +
-              roomCode +
-              " · " +
-              connectedControllerCount() +
-              "/" +
-              networkControllerLimit +
-              " phone controller" +
-              (networkControllerLimit === 1 ? "" : "s") +
-              " connected";
+            $("room-badge").textContent = roomConnectionBadge();
             if (networkRole === "host" && state === "select")
               drawMenu();
             return;
@@ -5800,6 +5932,26 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
             for (const key of INPUT_KEYS)
               if (message.pressed && message.pressed[key])
                 remotePresseds[player - 1][key] = true;
+            return;
+          }
+          if (
+            message.type === "pauseToggle" &&
+            networkRole === "host" &&
+            networkMode === "laptop-duo" &&
+            state === "fight"
+          ) {
+            paused = !paused;
+            msg = paused ? "PAUSED" : "FIGHT!";
+            sub = paused ? "Press P or Esc to resume" : "";
+            return;
+          }
+          if (
+            message.type === "restartRequest" &&
+            networkRole === "host" &&
+            networkMode === "laptop-duo" &&
+            state === "match"
+          ) {
+            restart();
             return;
           }
           if (message.type === "menuInput" && networkRole === "host") {
@@ -5821,6 +5973,38 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
             if (message.action === "left") menuMove(-1);
             else if (message.action === "right") menuMove(1);
             else if (message.action === "confirm") menuOk();
+            else if (
+              message.action === "select" &&
+              networkMode === "laptop-duo" &&
+              Number.isInteger(message.index) &&
+              message.index >= 0 &&
+              message.index <
+                (isStageSelectionStep() ? STG.length : ROS.length)
+            ) {
+              mIdx = message.index;
+              drawMenu();
+              menuOk();
+            }
+            return;
+          }
+          if (message.type === "lobbyState" && networkRole === "guest") {
+            mStep = Number.isInteger(message.step) ? message.step : 0;
+            mIdx = Number.isInteger(message.index) ? message.index : 0;
+            state = "select";
+            drawMenu();
+            return;
+          }
+          if (message.type === "snapshot" && networkRole === "guest") {
+            receiveGameSnapshot(message.snapshot);
+            return;
+          }
+          if (message.type === "matchStart" && networkRole === "guest") {
+            if (message.match) startOnlineMatch(message.match, false);
+            return;
+          }
+          if (message.type === "lobbyReset" && networkRole === "guest") {
+            resetOnlineSelection();
+            openMenu();
             return;
           }
           if (message.type === "pong" && message.id === networkPingId) {
@@ -5829,6 +6013,11 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
               Math.round(performance.now() - networkPingSentAt),
             );
             networkLastPongFrame = frame;
+            return;
+          }
+          if (message.type === "roomClosed" && networkRole === "guest") {
+            networkRole = null;
+            showHome("The host closed this game room.");
             return;
           }
         });
@@ -5852,6 +6041,16 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
       }
       $("solo-game").addEventListener("click", () => {
         $("home").style.display = "none";
+        localTwoPlayer = false;
+        networkRole = null;
+        networkMode = "duo";
+        networkControllerLimit = 2;
+        paused = false;
+        openMenu();
+      });
+      $("local-two-player").addEventListener("click", () => {
+        $("home").style.display = "none";
+        localTwoPlayer = true;
         networkRole = null;
         networkMode = "duo";
         networkControllerLimit = 2;
@@ -5864,16 +6063,46 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
       $("create-room").addEventListener("click", () =>
         connectOnline("host", ""),
       );
+      $("create-laptop-room").addEventListener("click", () =>
+        connectOnline("host", "", "laptop-duo"),
+      );
+      $("show-laptop-join").addEventListener("click", () => {
+        $("join-row").hidden = false;
+        $("laptop-room-code").focus();
+      });
+      $("laptop-room-code").addEventListener("input", () => {
+        $("laptop-room-code").value = $("laptop-room-code").value
+          .replace(/[^A-Za-z0-9]/g, "")
+          .slice(0, 6)
+          .toUpperCase();
+      });
+      $("laptop-room-code").addEventListener("keydown", (event) => {
+        if (event.key === "Enter")
+          connectOnline("guest", $("laptop-room-code").value, "laptop-duo");
+      });
+      $("join-laptop-room").addEventListener("click", () =>
+        connectOnline("guest", $("laptop-room-code").value, "laptop-duo"),
+      );
       $("join-game").addEventListener("click", () => {
         location.href = "/controller";
       });
+      const laptopJoinCode = new URLSearchParams(location.search).get("join");
+      if (laptopJoinCode) {
+        $("laptop-room-code").value = laptopJoinCode
+          .replace(/[^A-Za-z0-9]/g, "")
+          .slice(0, 6)
+          .toUpperCase();
+        $("join-row").hidden = false;
+      }
       $("copy-room").addEventListener("click", async () => {
         try {
           await navigator.clipboard.writeText(controllerLink);
           setHomeError(
-            networkMode === "phone-bot"
-              ? "Controller link copied. Open it on your phone."
-              : "Controller link copied. Open it on both phones.",
+            networkMode === "laptop-duo"
+              ? "Join link copied. Open it on the other laptop."
+              : networkMode === "phone-bot"
+                ? "Controller link copied. Open it on your phone."
+                : "Controller link copied. Open it on both phones.",
           );
         } catch {
           setHomeError("Share this controller link: " + controllerLink);
@@ -5881,13 +6110,16 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
       });
       $("copy-menu-room").addEventListener("click", async () => {
         const inviteMessage =
-          networkMode === "phone-bot"
-            ? "Open on your phone: "
-            : "Open on both phones: ";
+          networkMode === "laptop-duo"
+            ? "Join from another laptop: "
+            : networkMode === "phone-bot"
+              ? "Open on your phone: "
+              : "Open on both phones: ";
         try {
           await navigator.clipboard.writeText(controllerLink);
-          $("room-badge").textContent =
-            networkMode === "phone-bot"
+          $("room-badge").textContent = networkMode === "laptop-duo"
+            ? "Join link copied for the other laptop."
+            : networkMode === "phone-bot"
               ? "Controller link copied for your phone."
               : "Controller link copied for both phones.";
         } catch {
@@ -5905,49 +6137,61 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
         drawMenu();
       }
       function isStageSelectionStep() {
-        return networkRole === "host"
-          ? networkMode === "phone-bot"
-            ? mStep === 1
-            : mStep === 2
-          : !!mStep;
+        if (networkMode === "laptop-duo" || localTwoPlayer)
+          return mStep === 2;
+        if (networkRole === "host")
+          return networkMode === "phone-bot" ? mStep === 1 : mStep === 2;
+        return !!mStep;
       }
       function drawMenu() {
         const stageStep = isStageSelectionStep(),
           waiting =
-            networkRole === "host" &&
-            onlineStage !== null &&
-            connectedControllerCount() < networkControllerLimit,
+            (networkRole === "host" &&
+              ((networkMode === "laptop-duo" && mStep === 1) ||
+                (onlineStage !== null &&
+                  connectedControllerCount() < networkControllerLimit))) ||
+            (networkRole === "guest" && mStep !== 1),
           it = stageStep ? STG : ROS.map((r) => [r.name, r.info]);
         $("menu").style.display = "flex";
         $("mt").textContent = waiting
-          ? networkMode === "phone-bot"
-            ? "WAITING FOR PHONE CONTROLLER"
-            : "WAITING FOR BOTH CONTROLLERS"
+          ? networkRole === "guest"
+            ? stageStep
+              ? "WAITING FOR HOST TO CHOOSE STAGE"
+              : "WAITING FOR HOST TO CHOOSE PLAYER 1"
+            : networkMode === "laptop-duo"
+              ? onlineStage !== null
+                ? "WAITING FOR THE OTHER LAPTOP"
+                : "WAITING FOR PLAYER 2"
+              : networkMode === "phone-bot"
+                ? "WAITING FOR PHONE CONTROLLER"
+                : "WAITING FOR BOTH CONTROLLERS"
           : stageStep
             ? "CHOOSE STAGE"
-            : networkRole === "host"
+            : networkMode === "laptop-duo" || localTwoPlayer
+              ? "CHOOSE PLAYER " + (mStep + 1) + " FIGHTER"
+              : networkRole === "host"
               ? networkMode === "phone-bot"
                 ? "CHOOSE YOUR FIGHTER"
                 : "CHOOSE PLAYER " + (mStep + 1) + " FIGHTER"
               : "CHOOSE YOUR FIGHTER";
         $("mc").innerHTML = waiting
           ? ""
-          : mStep
+          : stageStep
             ? it
                 .map(
                   (x, i) =>
                     `<div class="card${i === mIdx ? " sel" : ""}" data-i="${i}"><b>${x[0]}</b><small>${x[1]}</small></div>`,
                 )
                 .join("")
-            : it
+            : ROS
                 .map((x, i) => {
-                  const cls = ROS[i].id;
+                  const cls = x.id;
                   return `<div class="card${i === mIdx ? " sel" : ""}" data-i="${i}">
-        <button class="hero-info-button" type="button" data-hero="${i}" aria-label="Show ${x[0]} powers and controls">?</button>
+        <button class="hero-info-button" type="button" data-hero="${i}" aria-label="Show ${x.name} powers and controls">?</button>
         ${PORT[i] ? '<img class="portrait" alt="" src="' + PORT[i] + '">' : ""}<div class="fighter-preview ${cls}" style="${PORT[i] ? "display:none" : ""}">
           <i class="preview-cape"></i><i class="preview-arm-l"></i><i class="preview-arm-r"></i>
           <i class="preview-leg-l"></i><i class="preview-leg-r"></i><i class="preview-body"></i><i class="preview-head"></i>
-        </div><b>${x[0]}</b><small>${x[1]}</small></div>`;
+        </div><b>${x.name}</b><small>${x.info}</small></div>`;
                 })
                 .join("");
         $("room-badge").textContent = networkRole
@@ -5957,18 +6201,44 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
             connectedControllerCount() +
             "/" +
             networkControllerLimit +
-            " phone controller" +
-            (networkControllerLimit === 1 ? "" : "s") +
-            " connected" +
-            (networkMode === "phone-bot"
-              ? " · one phone vs computer"
-              : " · choose fighters and stage on phones")
+            (networkMode === "laptop-duo"
+              ? " remote laptop connected · online laptop match"
+              : " phone controller" +
+                (networkControllerLimit === 1 ? "" : "s") +
+                " connected" +
+                (networkMode === "phone-bot"
+                  ? " · one phone vs computer"
+                  : " · choose fighters and stage on phones"))
           : "";
-        $("copy-menu-room").hidden = !networkRole;
+        $("copy-menu-room").hidden = networkRole !== "host";
         $("menu-help").textContent = waiting
-          ? networkMode === "phone-bot"
-            ? "Open the controller link on one phone. The game starts when it connects."
-            : "Open the controller link on both phones. The game starts when both connect."
+          ? networkMode === "laptop-duo"
+            ? networkRole === "guest" && stageStep
+              ? "Only the host laptop can choose the stage."
+              : networkRole === "guest"
+                ? "Waiting for Player 1 to choose a fighter on the host laptop."
+                : onlineStage !== null
+                  ? "Reconnect the other laptop to resume the match."
+                  : "Waiting for Player 2 to choose on the other laptop."
+            : networkMode === "phone-bot"
+              ? "Open the controller link on one phone. The game starts when it connects."
+              : "Open the controller link on both phones. The game starts when both connect."
+          : networkMode === "laptop-duo"
+            ? stageStep
+              ? "Only the host laptop (Player 1) chooses the stage."
+              : mStep === 0
+                ? networkRole === "guest"
+                  ? "Waiting for the host laptop to choose Player 1."
+                  : "Choose Player 1 here; Player 2 chooses on the other laptop."
+                : networkRole === "guest"
+                  ? "Choose Player 2 on this laptop."
+                  : "Waiting for Player 2 to choose on the other laptop."
+          : localTwoPlayer
+            ? stageStep
+              ? "Player 1 chooses the stage: A/D browse · J or Enter to pick."
+              : mStep === 1
+                ? "Player 2: ←/→ browse · 1 to pick · or use gamepad 2."
+                : "Player 1: A/D browse · J or Enter to pick · or use gamepad 1."
           : networkMode === "phone-bot"
             ? stageStep
               ? "As host, use your phone to choose the stage. The computer controls Player 2."
@@ -5999,10 +6269,23 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
         }
         [...$("mc").children].forEach((c) => {
           c.onclick = () => {
-            if (networkRole === "host") return;
-            mIdx = +c.dataset.i;
-            audioInit();
-            menuOk();
+            const index = Number(c.dataset.i);
+            if (networkRole === "host") {
+              if (
+                networkMode !== "laptop-duo" ||
+                (mStep !== 0 && !stageStep)
+              ) return;
+              mIdx = index;
+              audioInit();
+              menuOk();
+            } else if (networkRole === "guest") {
+              if (mStep !== 1) return;
+              netSend({ type: "menuInput", action: "select", index });
+            } else {
+              mIdx = index;
+              audioInit();
+              menuOk();
+            }
           };
           const help = c.querySelector(".hero-info-button");
           if (help)
@@ -6139,6 +6422,28 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
           }
           return;
         }
+        if (localTwoPlayer) {
+          if (mStep === 0) {
+            pick = mIdx;
+            mStep = 1;
+            mIdx = 0;
+          } else if (mStep === 1) {
+            opp = mIdx;
+            mStep = 2;
+            mIdx = 0;
+          } else {
+            setStage(mIdx);
+            $("menu").style.display = "none";
+            newRound();
+            return;
+          }
+          if (P) P.wins = B.wins = 0;
+          newRound();
+          state = "select";
+          msg = "";
+          drawMenu();
+          return;
+        }
         if (!mStep) {
           pick = mIdx;
           opp =
@@ -6197,8 +6502,9 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
         onlineGuestCharacter = match.guest;
         onlineStage = stageIndex;
         networkPausedForDisconnect = false;
-        $("room-badge").textContent =
-          networkMode === "phone-bot"
+        $("room-badge").textContent = networkMode === "laptop-duo"
+          ? "ROOM " + roomCode + " · TWO LAPTOPS CONNECTED"
+          : networkMode === "phone-bot"
             ? "ROOM " + roomCode + " · PHONE CONTROLLER CONNECTED · VS COMPUTER"
             : "ROOM " + roomCode + " · BOTH PHONE CONTROLLERS CONNECTED";
         setStage(stageIndex);
@@ -6248,14 +6554,20 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
         attachHomelanderRig(P);
         attachHomelanderRig(B);
         $("n1").textContent =
-          networkRole === "host"
-            ? (networkMode === "phone-bot" ? "YOU · " : "PLAYER 1 · ") +
-              ROS[pick].name
+          networkRole || localTwoPlayer
+            ? (networkMode === "phone-bot"
+                ? "YOU · "
+                : localTwoPlayer || networkMode === "laptop-duo"
+                  ? "PLAYER 1 · "
+                  : "") + ROS[pick].name
             : ROS[pick].name;
         $("n2").textContent =
-          networkRole === "host"
-            ? (networkMode === "phone-bot" ? "COMPUTER · " : "PLAYER 2 · ") +
-              ROS[opp].name
+          networkRole || localTwoPlayer
+            ? (networkMode === "phone-bot"
+                ? "COMPUTER · "
+                : localTwoPlayer || networkMode === "laptop-duo"
+                  ? "PLAYER 2 · "
+                  : "") + ROS[opp].name
             : ROS[opp].name;
         P.wins = pw;
         B.wins = bw;
@@ -8342,9 +8654,319 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
         } else setC("mv", "");
       }
       cam.position.set(0, 1.7, 8);
+      function gamepadInput(index) {
+        const input = {};
+        if (!navigator.getGamepads) return input;
+        const pad = navigator.getGamepads()[index];
+        if (!pad || !pad.connected) return input;
+        const x = pad.axes[0] || 0;
+        const y = pad.axes[1] || 0;
+        input.a =
+          x < -0.35 || !!(pad.buttons[14] && pad.buttons[14].pressed);
+        input.d =
+          x > 0.35 || !!(pad.buttons[15] && pad.buttons[15].pressed);
+        input.w =
+          y < -0.35 || !!(pad.buttons[12] && pad.buttons[12].pressed);
+        input.l =
+          y > 0.35 || !!(pad.buttons[13] && pad.buttons[13].pressed);
+        input.j = !!(pad.buttons[0] && pad.buttons[0].pressed);
+        input.k = !!(pad.buttons[1] && pad.buttons[1].pressed);
+        input.u = !!(pad.buttons[2] && pad.buttons[2].pressed);
+        input.e = !!(pad.buttons[3] && pad.buttons[3].pressed);
+        input.o = !!(pad.buttons[4] && pad.buttons[4].pressed);
+        input.r = !!(pad.buttons[5] && pad.buttons[5].pressed);
+        input.i = !!(pad.buttons[6] && pad.buttons[6].pressed);
+        return input;
+      }
+      function combineInputs(...inputs) {
+        const combined = {};
+        for (const key of INPUT_KEYS)
+          combined[key] = inputs.some(
+            (input) => input && input[key] === true,
+          );
+        return combined;
+      }
+      function keyboardInput(source) {
+        const input = {};
+        for (const key of INPUT_KEYS) input[key] = source[key] === true;
+        return input;
+      }
+      const menuGamepadState = [{}, {}];
+      function handleGamepadMenu() {
+        if (state !== "select" || !navigator.getGamepads) return;
+        if (
+          networkRole === "host" &&
+          (networkMode !== "laptop-duo" ||
+            (mStep !== 0 && !isStageSelectionStep()))
+        ) return;
+        if (networkRole === "guest" && mStep !== 1) return;
+        const index = localTwoPlayer && mStep === 1 ? 1 : 0;
+        const pad = navigator.getGamepads()[index];
+        if (!pad || !pad.connected) return;
+        const x = pad.axes[0] || 0;
+        const stateNow = {
+          left:
+            x < -0.55 || !!(pad.buttons[14] && pad.buttons[14].pressed),
+          right:
+            x > 0.55 || !!(pad.buttons[15] && pad.buttons[15].pressed),
+          confirm: !!(
+            (pad.buttons[0] && pad.buttons[0].pressed) ||
+            (pad.buttons[9] && pad.buttons[9].pressed)
+          ),
+        };
+        const previous = menuGamepadState[index];
+        menuGamepadState[index] = stateNow;
+        const sendOrApply = (action) => {
+          if (networkRole === "guest")
+            netSend({ type: "menuInput", action });
+          else if (action === "left") menuMove(-1);
+          else if (action === "right") menuMove(1);
+          else menuOk();
+        };
+        if (stateNow.left && !previous.left) sendOrApply("left");
+        else if (stateNow.right && !previous.right) sendOrApply("right");
+        if (stateNow.confirm && !previous.confirm) sendOrApply("confirm");
+      }
+      const SNAPSHOT_FIGHTER_FIELDS = [
+        "x", "y", "vx", "vy", "face", "hp", "bleedT", "burnT", "inv", "cd", "lcd", "flightT",
+        "flightCd", "speedBoostT", "speedBoostCd", "rp", "block", "hit",
+        "wins", "koT", "sp", "cmb", "cmbT", "hurtT", "gb", "hz", "altp",
+        "sq", "land", "tair", "kdT", "bn", "getup", "fly", "down", "landed",
+        "ip", "z",
+      ];
+      function createGameSnapshot() {
+        return {
+          frame,
+          state,
+          stT,
+          timer,
+          tick,
+          paused,
+          msg,
+          sub,
+          fighters: [P, B].map((fighter) => {
+            const data = {};
+            for (const key of SNAPSHOT_FIGHTER_FIELDS)
+              data[key] = fighter[key];
+            data.atk = fighter.atk ? Object.assign({}, fighter.atk) : null;
+            return data;
+          }),
+          shots: shots.map((shot) => ({
+            owner: shot.f === P ? 0 : 1,
+            x: shot.spr.position.x,
+            y: shot.spr.position.y,
+            z: shot.spr.position.z,
+            vx: shot.vx,
+            l: shot.l,
+            t: shot.t,
+            y0: shot.y0,
+          })),
+          beams: beams.map((beam) => ({
+            owner: beam.f === P ? 0 : 1,
+            l: beam.l,
+            down: beam.down === true,
+          })),
+        };
+      }
+      function applyGuestSnapshotFrame() {
+        if (networkRole !== "guest" || !guestSnapshotCurrent) return;
+        const current = guestSnapshotCurrent.snapshot;
+        const previous = guestSnapshotPrevious && guestSnapshotPrevious.snapshot;
+        const alpha = previous
+          ? Math.min(
+              1,
+              Math.max(
+                0,
+                (performance.now() - guestSnapshotCurrent.receivedAt) / 34,
+              ),
+            )
+          : 1;
+        for (let i = 0; i < 2; i++) {
+          const target = i === 0 ? P : B;
+          const from = previous && previous.fighters[i];
+          const to = current.fighters[i];
+          if (!target || !to) continue;
+          for (const key of ["x", "y", "vx"])
+            if (Number.isFinite(to[key]))
+              target[key] =
+                from && Number.isFinite(from[key])
+                  ? from[key] + (to[key] - from[key]) * alpha
+                  : to[key];
+        }
+      }
+      function receiveGameSnapshot(snapshot) {
+        if (
+          !snapshot ||
+          !Array.isArray(snapshot.fighters) ||
+          snapshot.fighters.length !== 2 ||
+          !["intro", "fight", "ko", "match"].includes(snapshot.state)
+        ) return;
+        if (!P || !B) return;
+        guestSnapshotPrevious = guestSnapshotCurrent;
+        guestSnapshotCurrent = { snapshot, receivedAt: performance.now() };
+        for (let i = 0; i < 2; i++) {
+          const source = snapshot.fighters[i];
+          const target = i === 0 ? P : B;
+          if (!source || typeof source !== "object") return;
+          for (const key of SNAPSHOT_FIGHTER_FIELDS) {
+            const value = source[key];
+            if (
+              guestSnapshotPrevious &&
+              (key === "x" || key === "y" || key === "vx")
+            ) continue;
+            if (
+              typeof value === "boolean" ||
+              (typeof value === "number" && Number.isFinite(value))
+            ) target[key] = value;
+          }
+          target.atk =
+            source.atk &&
+            typeof source.atk === "object" &&
+            typeof source.atk.type === "string" &&
+            Number.isFinite(source.atk.t)
+              ? Object.assign({}, source.atk)
+              : null;
+        }
+        if (
+          Number.isInteger(snapshot.frame) &&
+          Number.isInteger(snapshot.stT) &&
+          Number.isInteger(snapshot.timer) &&
+          Number.isInteger(snapshot.tick)
+        ) {
+          frame = snapshot.frame;
+          stT = snapshot.stT;
+          timer = snapshot.timer;
+          tick = snapshot.tick;
+        }
+        state = snapshot.state;
+        paused = snapshot.paused === true;
+        msg = typeof snapshot.msg === "string" ? snapshot.msg.slice(0, 100) : "";
+        sub = typeof snapshot.sub === "string" ? snapshot.sub.slice(0, 120) : "";
+        syncGuestProjectiles(snapshot);
+      }
+      function syncGuestProjectiles(snapshot) {
+        const remoteShots = shots.filter((shot) => shot.remote);
+        const shotData = Array.isArray(snapshot.shots)
+          ? snapshot.shots.slice(0, 32)
+          : [];
+        for (let i = 0; i < shotData.length; i++) {
+          const data = shotData[i];
+          if (
+            !data ||
+            (data.owner !== 0 && data.owner !== 1) ||
+            ![data.x, data.y, data.z, data.vx, data.l, data.t, data.y0].every(
+              Number.isFinite,
+            )
+          ) continue;
+          const fighter = data.owner === 0 ? P : B;
+          let shot = remoteShots[i];
+          if (!shot) {
+            const p = fighter.cfg.proj;
+            if (!p) continue;
+            const sprite = new THREE.Sprite(
+              new THREE.SpriteMaterial({
+                map: sparkTex,
+                color: p.col,
+                transparent: true,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false,
+              }),
+            );
+            const core = new THREE.Sprite(
+              new THREE.SpriteMaterial({
+                map: sparkTex,
+                color: 0xffffff,
+                transparent: true,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false,
+              }),
+            );
+            core.scale.set(0.5, 0.5, 1);
+            sprite.add(core);
+            S.add(sprite);
+            shot = {
+              f: fighter,
+              spr: sprite,
+              vx: data.vx,
+              p,
+              l: data.l,
+              vis: true,
+              t: data.t,
+              y0: data.y0,
+              remote: true,
+            };
+            shots.push(shot);
+            remoteShots.push(shot);
+          }
+          shot.f = fighter;
+          shot.p = fighter.cfg.proj;
+          shot.vx = data.vx;
+          shot.l = data.l;
+          shot.t = data.t;
+          shot.y0 = data.y0;
+          shot.spr.position.set(data.x, data.y, data.z);
+        }
+        for (let i = remoteShots.length - 1; i >= shotData.length; i--) {
+          const shot = remoteShots[i];
+          S.remove(shot.spr);
+          shot.spr.traverse((sprite) => {
+            if (sprite.material) sprite.material.dispose();
+          });
+          const index = shots.indexOf(shot);
+          if (index >= 0) shots.splice(index, 1);
+        }
+
+        const remoteBeams = beams.filter((beam) => beam.remote);
+        const beamData = Array.isArray(snapshot.beams)
+          ? snapshot.beams.slice(0, 16)
+          : [];
+        for (let i = 0; i < beamData.length; i++) {
+          const data = beamData[i];
+          if (
+            !data ||
+            (data.owner !== 0 && data.owner !== 1) ||
+            !Number.isFinite(data.l)
+          ) continue;
+          const fighter = data.owner === 0 ? P : B;
+          let beam = remoteBeams[i];
+          if (!beam) {
+            beam = {
+              f: fighter,
+              l: data.l,
+              o: null,
+              down: data.down === true,
+              target: data.down ? (fighter === P ? B : P) : null,
+              remote: true,
+            };
+            beams.push(beam);
+            remoteBeams.push(beam);
+          }
+          beam.f = fighter;
+          beam.l = data.l;
+          beam.down = data.down === true;
+          beam.target = beam.down ? (fighter === P ? B : P) : null;
+        }
+        for (let i = remoteBeams.length - 1; i >= beamData.length; i--) {
+          const beam = remoteBeams[i];
+          if (beam.o) S.remove(beam.o);
+          if (beam.c2) beam.c2.material.dispose();
+          const index = beams.indexOf(beam);
+          if (index >= 0) beams.splice(index, 1);
+        }
+      }
       function tickGame() {
         frame++;
-        stT++;
+        if (networkRole !== "guest") stT++;
+        applyGuestSnapshotFrame();
+        handleGamepadMenu();
+        if (networkRole === "guest" && state === "fight") {
+          const input = combineInputs(keyboardInput(keys), gamepadInput(0));
+          const pressed = {};
+          for (const key of INPUT_KEYS)
+            pressed[key] = input[key] && !guestLastInput[key];
+          guestLastInput = input;
+          netSend({ type: "input", input, pressed });
+        }
         if (
           networkRole &&
           frame % 60 === 0 &&
@@ -8363,7 +8985,7 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
           (gustT > 0 ? Math.sin(Math.PI * (1 - gustT / 90)) * 0.9 : 0);
         const slow = state === "ko" && stT < 60 && frame % 3 !== 0;
         if (hs > 0) hs--;
-        else if (!slow && !paused) {
+        else if (!slow && !paused && networkRole !== "guest") {
           if (state === "intro" && stT > 45) {
             state = "fight";
             stT = 0;
@@ -8376,30 +8998,21 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
               timer--;
             }
             if (
-              (networkRole !== "host" || networkMode === "phone-bot") &&
+              ((networkRole !== "host" && !localTwoPlayer) ||
+                networkMode === "phone-bot") &&
               --bt <= 0
             )
               botThink();
             const playerOneInput =
-              networkRole === "host"
+              networkRole === "host" && networkMode !== "laptop-duo"
                 ? Object.assign({}, remoteInputs[0])
-                : {
-                    a: keys.a,
-                    d: keys.d,
-                    w: keys.w,
-                    j: keys.j,
-                    k: keys.k,
-                    l: keys.l,
-                    u: keys.u,
-                    o: keys.o,
-                    e: keys.e,
-                    i: keys.i,
-                    r: keys.r,
-                  };
+                : combineInputs(keyboardInput(keys), gamepadInput(0));
             const playerTwoInput =
               networkRole === "host" && networkMode !== "phone-bot"
                 ? Object.assign({}, remoteInputs[1])
-                : bi;
+                : localTwoPlayer
+                  ? combineInputs(keyboardInput(p2Keys), gamepadInput(1))
+                  : bi;
             if (networkRole === "host") {
               for (const key of INPUT_KEYS)
                 for (let player = 0; player < 2; player++)
@@ -8649,6 +9262,11 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
         }
         camUpdate();
         hud();
+        if (
+          networkRole === "host" &&
+          networkMode === "laptop-duo" &&
+          frame % 2 === 0
+        ) netSend({ type: "snapshot", snapshot: createGameSnapshot() });
       }
       let lastT = 0,
         accT = 0,
@@ -8670,41 +9288,26 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
             if (++nT >= 45) {
               const av = accT / nT;
               accT = nT = 0;
-              if (av > 21 && pr > 0.5) {
-                pr = Math.max(0.5, pr - 0.25);
+              const minPixelRatio = Math.min(PR_MAX, 1);
+              if (av > 20 && bloomPass && bloomPass.enabled) {
+                bloomPass.enabled = false;
+              } else if (av > 21 && postEnabled) {
+                postEnabled = false;
+              } else if (av > 22 && R.shadowMap.enabled) {
+                R.shadowMap.enabled = false;
+              } else if (av > 24 && pr > minPixelRatio) {
+                pr = Math.max(minPixelRatio, pr - 0.25);
                 R.setPixelRatio(pr);
                 resize();
-              } else if (
-                av > 24 &&
-                pr <= 0.5 &&
-                bloomPass &&
-                bloomPass.enabled
-              ) {
-                bloomPass.enabled = false;
-              } else if (
-                av > 24 &&
-                pr <= 0.5 &&
-                bloomPass &&
-                !bloomPass.enabled &&
-                postEnabled
-              ) {
-                postEnabled = false;
-              } else if (
-                av > 24 &&
-                pr <= 0.5 &&
-                !postEnabled &&
-                R.shadowMap.enabled
-              ) {
-                R.shadowMap.enabled = false;
-              } else if (av < 17.5 && pr < PR_MAX) {
+              } else if (av < 16 && pr < PR_MAX) {
                 pr = Math.min(PR_MAX, pr + 0.25);
                 R.setPixelRatio(pr);
                 resize();
-              } else if (av < 17.5 && !LOW_POWER && !R.shadowMap.enabled) {
+              } else if (av < 16 && !LOW_POWER && !R.shadowMap.enabled) {
                 R.shadowMap.enabled = true;
-              } else if (av < 17.5 && !LOW_POWER && !postEnabled) {
+              } else if (av < 16 && !LOW_POWER && !postEnabled) {
                 postEnabled = true;
-              } else if (av < 17.5 && !LOW_POWER && bloomPass) {
+              } else if (av < 16 && !LOW_POWER && bloomPass) {
                 bloomPass.enabled = true;
               }
             }
@@ -8858,7 +9461,6 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
         },
         true,
       );
-      makePortraits();
       openMenu();
       showHome();
       loop();
