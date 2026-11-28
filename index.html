@@ -543,6 +543,12 @@
         letter-spacing: 0.2em;
         color: #e0b43a !important;
       }
+      #controller-invite {
+        max-width: min(520px, 90vw);
+        overflow-wrap: anywhere;
+        color: #aab !important;
+        font-size: 12px !important;
+      }
       #home-error {
         color: #ff857c !important;
       }
@@ -1054,28 +1060,23 @@
     <div id="home">
       <h2>HOMELANDER 3D</h2>
       <p>
-        Play locally against the rival bot, or challenge a friend online in real
-        time.
+        Play locally, use one phone against the computer, or connect two phones
+        as controllers.
       </p>
       <button id="solo-game">LOCAL GAME</button>
-      <button id="create-room">CREATE ONLINE ROOM</button>
-      <div id="join-row">
-        <input
-          id="room-input"
-          maxlength="6"
-          placeholder="ROOM CODE"
-          aria-label="Room code"
-        /><button id="join-room">JOIN ROOM</button>
-      </div>
+      <button id="phone-bot-game">PHONE VS COMPUTER</button>
+      <button id="create-room">CREATE GAME</button>
+      <button id="join-game">JOIN GAME · PHONE CONTROLLER</button>
       <p id="room-code" hidden></p>
-      <button id="copy-room" hidden>COPY ROOM CODE</button>
+      <p id="controller-invite" hidden></p>
+      <button id="copy-room" hidden>COPY CONTROLLER LINK</button>
       <p id="home-error" role="status"></p>
     </div>
     <div id="menu">
       <h2 id="mt"></h2>
       <div id="mc"></div>
       <p id="room-badge"></p>
-      <button id="copy-menu-room" hidden>COPY ROOM CODE</button>
+      <button id="copy-menu-room" hidden>COPY CONTROLLER LINK</button>
       <p id="menu-help">A/D to browse · J or Enter to pick · or tap a card</p>
     </div>
     <div
@@ -1194,8 +1195,8 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
-    <script src="assets/js/GLTFLoader.js"></script>
-    <script src="assets/js/RGBELoader.js"></script>
+    <script src="GLTFLoader.js"></script>
+    <script src="RGBELoader.js"></script>
     <script>
       const $ = (id) => document.getElementById(id);
       const keys = {},
@@ -1232,7 +1233,6 @@
         }
         const wasDown = !!keys[k];
         keys[k] = true;
-        if (networkRole === "guest") sendInput(wasDown ? [] : [k]);
         if (k === "enter" && (!networkRole || state === "match")) restart();
         if (kmap[e.key]) e.preventDefault();
       });
@@ -1241,8 +1241,7 @@
         const k = e.key.toLowerCase();
         if (
           (k === "p" || k === "escape") &&
-          state === "fight" &&
-          networkRole !== "guest"
+          state === "fight"
         ) {
           paused = !paused;
           msg = paused ? "PAUSED" : "";
@@ -1256,12 +1255,10 @@
       });
       addEventListener("blur", () => {
         for (const k in keys) keys[k] = false;
-        if (networkRole === "guest") sendInput();
       });
       addEventListener("contextmenu", (e) => e.preventDefault());
       addEventListener("keyup", (e) => {
         keys[kmap[e.key] || e.key.toLowerCase()] = false;
-        if (networkRole === "guest") sendInput();
       });
       document.querySelectorAll(".pad button").forEach((b) => {
         const k = b.dataset.k;
@@ -1269,13 +1266,11 @@
           e.preventDefault();
           const wasDown = !!keys[k];
           keys[k] = true;
-          if (networkRole === "guest") sendInput(wasDown ? [] : [k]);
           if (state === "match") restart();
         });
         ["pointerup", "pointerleave", "pointercancel"].forEach((ev) =>
           b.addEventListener(ev, () => {
             keys[k] = false;
-            if (networkRole === "guest") sendInput();
           }),
         );
       });
@@ -1291,12 +1286,19 @@
 
       // ---------- renderer / scene ----------
       const COARSE = matchMedia("(pointer:coarse)").matches,
-        PR_MAX = Math.min(devicePixelRatio, COARSE ? 1.25 : 1.75);
+        LOW_POWER =
+          COARSE ||
+          (navigator.deviceMemory && navigator.deviceMemory <= 8) ||
+          (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 6),
+        PR_MAX = Math.min(devicePixelRatio, LOW_POWER ? 1 : 1.5);
       let pr = PR_MAX;
-      const R = new THREE.WebGLRenderer({ antialias: true });
+      const R = new THREE.WebGLRenderer({
+        antialias: !LOW_POWER,
+        powerPreference: "high-performance",
+      });
       R.setPixelRatio(pr);
-      R.shadowMap.enabled = true;
-      R.shadowMap.type = THREE.PCFSoftShadowMap;
+      R.shadowMap.enabled = !LOW_POWER;
+      R.shadowMap.type = THREE.PCFShadowMap;
       R.outputEncoding = THREE.sRGBEncoding;
       R.toneMapping = THREE.ACESFilmicToneMapping;
       R.toneMappingExposure = 1.05;
@@ -1306,7 +1308,8 @@
       const cam = new THREE.PerspectiveCamera(36, 1, 0.1, 400);
       let composer = null,
         bloomPass = null,
-        gradePass = null;
+        gradePass = null,
+        postEnabled = true;
       const gradeShader = {
         uniforms: {
           tDiffuse: { value: null },
@@ -1333,6 +1336,7 @@
       };
       function setupPost() {
         if (
+          LOW_POWER ||
           typeof THREE.EffectComposer !== "function" ||
           typeof THREE.UnrealBloomPass !== "function" ||
           typeof THREE.ShaderPass !== "function"
@@ -4929,13 +4933,17 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
       let networkRole = null,
         networkSocket = null,
         roomCode = "",
+        controllerLink = "",
+        controllerSlots = [false, false],
+        networkMode = "duo",
+        networkControllerLimit = 2,
         onlineHostCharacter = null,
         onlineGuestCharacter = null,
         onlineStage = null,
         onlineRound = 0,
-        remoteInput = {},
-        remotePressed = {},
-        remoteSnapshot = null,
+        remoteInputs = [{}, {}],
+        remotePresseds = [{}, {}],
+        networkPausedForDisconnect = false,
         networkRtt = null,
         networkPingId = 0,
         networkPingSentAt = 0,
@@ -5627,19 +5635,11 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
         if (networkSocket && networkSocket.readyState === WebSocket.OPEN)
           networkSocket.send(JSON.stringify(message));
       }
-      function sendInput(pressedKeys = []) {
-        if (networkRole !== "guest") return;
-        const input = {},
-          pressed = {},
-          pressedSet = new Set(pressedKeys);
-        for (const k of INPUT_KEYS) {
-          input[k] = !!keys[k];
-          pressed[k] = pressedSet.has(k);
-        }
-        netSend({ type: "input", input, pressed });
-      }
       function setHomeError(text) {
         $("home-error").textContent = text || "";
+      }
+      function connectedControllerCount() {
+        return controllerSlots.filter(Boolean).length;
       }
       function showHome(error) {
         $("home").style.display = "flex";
@@ -5651,11 +5651,11 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
         onlineGuestCharacter = null;
         onlineStage = null;
         onlineRound = 0;
-        remoteInput = {};
-        remotePressed = {};
-        remoteSnapshot = null;
+        remoteInputs = [{}, {}];
+        remotePresseds = [{}, {}];
+        networkPausedForDisconnect = false;
       }
-      function connectOnline(role, code) {
+      function connectOnline(role, code, mode = "duo") {
         if (location.protocol === "file:") {
           setHomeError(
             "Open this game from its hosted HTTP/HTTPS address to play online.",
@@ -5672,7 +5672,12 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
         connection.addEventListener("open", () => {
           if (networkSocket === connection)
             netSend(
-              role === "host" ? { type: "create" } : { type: "join", code },
+              role === "host"
+                ? {
+                    type: "create",
+                    mode: mode === "phone-bot" ? "phone-bot" : "duo",
+                  }
+                : { type: "join", code },
             );
         });
         connection.addEventListener("message", (event) => {
@@ -5692,9 +5697,20 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
             }
             return;
           }
-          if (message.type === "created" || message.type === "joined") {
+          if (message.type === "created") {
             networkRole = role;
+            networkMode =
+              message.mode === "phone-bot" ? "phone-bot" : "duo";
+            networkControllerLimit =
+              message.controllerLimit === 1 ? 1 : 2;
             roomCode = message.code;
+            controllerSlots = Array.isArray(message.controllers)
+              ? message.controllers.map(Boolean).slice(0, 2)
+              : [false, false];
+            while (controllerSlots.length < 2) controllerSlots.push(false);
+            const invite = new URL("/controller", location.href);
+            invite.searchParams.set("room", roomCode);
+            controllerLink = invite.href;
             resetOnlineSelection();
             setHomeError("");
             networkRtt = null;
@@ -5702,54 +5718,80 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
             networkPingId = 0;
             $("room-code").textContent = "ROOM " + roomCode;
             $("room-code").hidden = false;
+            $("controller-invite").textContent =
+              (networkMode === "phone-bot"
+                ? "On your phone, open "
+                : "On both phones, open ") + controllerLink;
+            $("controller-invite").hidden = false;
             $("copy-room").hidden = false;
             $("home").style.display = "none";
             openMenu();
             return;
           }
-          if (message.type === "peerJoined") {
+          if (message.type === "controllerJoined") {
+            const player = Number(message.player);
+            if (Number.isInteger(player) && player >= 1 && player <= 2)
+              controllerSlots[player - 1] = true;
+            if (
+              connectedControllerCount() >= networkControllerLimit &&
+              networkPausedForDisconnect &&
+              state !== "select" &&
+              state !== "ko" &&
+              state !== "match"
+            ) {
+              paused = false;
+              msg = "FIGHT!";
+              sub = "";
+              networkPausedForDisconnect = false;
+            }
             $("room-badge").textContent =
-              "Friend connected · choose your fighter and stage";
-            return;
-          }
-          if (message.type === "peerLeft") {
-            if (networkRole === "host") {
-              resetOnlineSelection();
-              openMenu();
-              $("room-badge").textContent =
-                "Friend disconnected · share the room code to invite another player";
-              return;
-            }
-            const disconnected = networkSocket;
-            networkRole = null;
-            networkSocket = null;
-            resetOnlineSelection();
-            if (disconnected) disconnected.close();
-            showHome(
-              "The other player disconnected. Create or join a room to play again.",
-            );
-            return;
-          }
-          if (message.type === "selection" && networkRole === "host") {
-            const selected = ROS.findIndex((c) => c.id === message.character);
-            if (selected < 0) {
-              $("room-badge").textContent =
-                "Your friend chose an unavailable fighter. Ask them to reconnect.";
-              return;
-            }
-            onlineGuestCharacter = message.character;
+              "ROOM " +
+              roomCode +
+              " · " +
+              connectedControllerCount() +
+              "/" +
+              networkControllerLimit +
+              " phone controller" +
+              (networkControllerLimit === 1 ? "" : "s") +
+              " connected";
             maybeStartOnlineMatch();
             return;
           }
-          if (message.type === "matchStart" && networkRole === "guest") {
-            startOnlineMatch(message.match, false);
+          if (message.type === "controllerLeft") {
+            const player = Number(message.player);
+            if (Number.isInteger(player) && player >= 1 && player <= 2) {
+              controllerSlots[player - 1] = false;
+              remoteInputs[player - 1] = {};
+              remotePresseds[player - 1] = {};
+              if (state !== "select" && state !== "ko" && state !== "match" && !paused) {
+                paused = true;
+                networkPausedForDisconnect = true;
+                msg = "PLAYER " + player + " DISCONNECTED";
+                sub =
+                  networkControllerLimit === 1
+                    ? "Reconnect the phone controller to continue"
+                    : "Reconnect both phone controllers to continue";
+              }
+            }
+            $("room-badge").textContent =
+              "ROOM " +
+              roomCode +
+              " · " +
+              connectedControllerCount() +
+              "/" +
+              networkControllerLimit +
+              " phone controller" +
+              (networkControllerLimit === 1 ? "" : "s") +
+              " connected";
             return;
           }
           if (message.type === "input" && networkRole === "host") {
-            remoteInput = message.input || {};
+            const player = Number(message.player);
+            if (!Number.isInteger(player) || player < 1 || player > 2) return;
+            remoteInputs[player - 1] = message.input || {};
             for (const key of INPUT_KEYS)
               if (message.pressed && message.pressed[key])
-                remotePressed[key] = true;
+                remotePresseds[player - 1][key] = true;
             return;
           }
           if (message.type === "pong" && message.id === networkPingId) {
@@ -5759,14 +5801,6 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
             );
             networkLastPongFrame = frame;
             return;
-          }
-          if (message.type === "snapshot" && networkRole === "guest") {
-            remoteSnapshot = message.snapshot;
-            return;
-          }
-          if (message.type === "lobbyReset" && networkRole === "guest") {
-            resetOnlineSelection();
-            openMenu();
           }
         });
         connection.addEventListener("error", () => {
@@ -5780,6 +5814,8 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
           networkSocket = null;
           if (networkRole) {
             networkRole = null;
+            networkMode = "duo";
+            networkControllerLimit = 2;
             resetOnlineSelection();
             showHome("Connection to the game server was lost.");
           }
@@ -5788,32 +5824,45 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
       $("solo-game").addEventListener("click", () => {
         $("home").style.display = "none";
         networkRole = null;
+        networkMode = "duo";
+        networkControllerLimit = 2;
         paused = false;
         openMenu();
       });
+      $("phone-bot-game").addEventListener("click", () =>
+        connectOnline("host", "", "phone-bot"),
+      );
       $("create-room").addEventListener("click", () =>
         connectOnline("host", ""),
       );
-      $("join-room").addEventListener("click", () =>
-        connectOnline("guest", $("room-input").value),
-      );
-      $("room-input").addEventListener("keydown", (e) => {
-        if (e.key === "Enter") connectOnline("guest", $("room-input").value);
+      $("join-game").addEventListener("click", () => {
+        location.href = "/controller";
       });
       $("copy-room").addEventListener("click", async () => {
         try {
-          await navigator.clipboard.writeText(roomCode);
-          setHomeError("Room code copied. Share it with your friend.");
+          await navigator.clipboard.writeText(controllerLink);
+          setHomeError(
+            networkMode === "phone-bot"
+              ? "Controller link copied. Open it on your phone."
+              : "Controller link copied. Open it on both phones.",
+          );
         } catch {
-          setHomeError("Room code: " + roomCode);
+          setHomeError("Share this controller link: " + controllerLink);
         }
       });
       $("copy-menu-room").addEventListener("click", async () => {
+        const inviteMessage =
+          networkMode === "phone-bot"
+            ? "Open on your phone: "
+            : "Open on both phones: ";
         try {
-          await navigator.clipboard.writeText(roomCode);
-          $("room-badge").textContent = "Room code copied: " + roomCode;
+          await navigator.clipboard.writeText(controllerLink);
+          $("room-badge").textContent =
+            networkMode === "phone-bot"
+              ? "Controller link copied for your phone."
+              : "Controller link copied for both phones.";
         } catch {
-          $("room-badge").textContent = "Share this room code: " + roomCode;
+          $("room-badge").textContent = inviteMessage + controllerLink;
         }
       });
       function openMenu() {
@@ -5826,16 +5875,32 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
         msg = "";
         drawMenu();
       }
+      function isStageSelectionStep() {
+        return networkRole === "host"
+          ? networkMode === "phone-bot"
+            ? mStep === 1
+            : mStep === 2
+          : !!mStep;
+      }
       function drawMenu() {
-        const waiting =
-            networkRole === "guest" && onlineGuestCharacter !== null,
-          it = mStep ? STG : ROS.map((r) => [r.name, r.info]);
+        const stageStep = isStageSelectionStep(),
+          waiting =
+            networkRole === "host" &&
+            onlineStage !== null &&
+            connectedControllerCount() < networkControllerLimit,
+          it = stageStep ? STG : ROS.map((r) => [r.name, r.info]);
         $("menu").style.display = "flex";
         $("mt").textContent = waiting
-          ? "WAITING FOR HOST"
-          : mStep
+          ? networkMode === "phone-bot"
+            ? "WAITING FOR PHONE CONTROLLER"
+            : "WAITING FOR BOTH CONTROLLERS"
+          : stageStep
             ? "CHOOSE STAGE"
-            : "CHOOSE YOUR FIGHTER";
+            : networkRole === "host"
+              ? networkMode === "phone-bot"
+                ? "CHOOSE YOUR FIGHTER"
+                : "CHOOSE PLAYER " + (mStep + 1) + " FIGHTER"
+              : "CHOOSE YOUR FIGHTER";
         $("mc").innerHTML = waiting
           ? ""
           : mStep
@@ -5860,13 +5925,25 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
           ? "ROOM " +
             roomCode +
             " · " +
-            (networkRole === "host"
-              ? "share the code; select a fighter and stage"
-              : "select a fighter to ready up")
+            connectedControllerCount() +
+            "/" +
+            networkControllerLimit +
+            " phone controller" +
+            (networkControllerLimit === 1 ? "" : "s") +
+            " connected" +
+            (networkMode === "phone-bot"
+              ? " · one phone vs computer"
+              : " · select both fighters and stage")
           : "";
         $("copy-menu-room").hidden = !networkRole;
         $("menu-help").textContent = waiting
-          ? "You are ready. Waiting for the room host to start the match."
+          ? networkMode === "phone-bot"
+            ? "Open the controller link on one phone. The game starts when it connects."
+            : "Open the controller link on both phones. The game starts when both connect."
+          : networkMode === "phone-bot"
+            ? stageStep
+              ? "Choose a stage. Your phone controls Player 1; the computer controls Player 2."
+              : "Choose your fighter on the laptop, then play the computer using one phone."
           : "A/D to browse · J or Enter to pick · or tap a card";
         [...$("mc").children].forEach((c) => {
           c.onclick = () => {
@@ -5952,27 +6029,51 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
         closeHeroHelpOnBackdrop,
       );
       function menuMove(d) {
-        if (networkRole === "guest" && onlineGuestCharacter !== null) return;
         if (networkRole === "host" && onlineStage !== null) return;
-        const n = mStep ? STG.length : ROS.length;
+        const n = isStageSelectionStep() ? STG.length : ROS.length;
         mIdx = (mIdx + d + n) % n;
         drawMenu();
         sfx("select");
       }
       function menuOk() {
-        if (networkRole === "guest") {
-          if (onlineGuestCharacter !== null) return;
-          onlineGuestCharacter = ROS[mIdx].id;
-          netSend({ type: "selection", character: onlineGuestCharacter });
-          drawMenu();
-          return;
-        }
         if (networkRole === "host") {
+          if (networkMode === "phone-bot") {
+            if (mStep === 0) {
+              onlineHostCharacter = ROS[mIdx].id;
+              pick = mIdx;
+              const botIndex =
+                (mIdx + 1 + ((Math.random() * (ROS.length - 1)) | 0)) %
+                ROS.length;
+              onlineGuestCharacter = ROS[botIndex].id;
+              opp = botIndex;
+              mStep = 1;
+              mIdx = 0;
+              if (P) P.wins = B.wins = 0;
+              newRound();
+              state = "select";
+              msg = "";
+              drawMenu();
+            } else {
+              onlineStage = mIdx;
+              maybeStartOnlineMatch();
+            }
+            return;
+          }
           if (onlineStage !== null) return;
-          if (!mStep) {
+          if (mStep === 0) {
             onlineHostCharacter = ROS[mIdx].id;
             pick = mIdx;
             mStep = 1;
+            mIdx = 0;
+            if (P) P.wins = B.wins = 0;
+            newRound();
+            state = "select";
+            msg = "";
+            drawMenu();
+          } else if (mStep === 1) {
+            onlineGuestCharacter = ROS[mIdx].id;
+            opp = mIdx;
+            mStep = 2;
             mIdx = 0;
             if (P) P.wins = B.wins = 0;
             newRound();
@@ -6005,16 +6106,21 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
       function maybeStartOnlineMatch() {
         if (
           networkRole !== "host" ||
+          state !== "select" ||
           onlineHostCharacter === null ||
           onlineGuestCharacter === null ||
           onlineStage === null
-        ) {
-          if (networkRole === "host" && onlineStage !== null) {
-            $("mt").textContent = "WAITING FOR FRIEND";
-            $("mc").innerHTML = "";
-            $("menu-help").textContent =
-              "Your friend must join the room and choose a fighter.";
-          }
+        ) return;
+        if (connectedControllerCount() < networkControllerLimit) {
+          $("mt").textContent =
+            networkMode === "phone-bot"
+              ? "WAITING FOR PHONE CONTROLLER"
+              : "WAITING FOR BOTH CONTROLLERS";
+          $("mc").innerHTML = "";
+          $("menu-help").textContent =
+            networkMode === "phone-bot"
+              ? "Open the controller link on one phone. The game starts when it connects."
+              : "Open the controller link on both phones. The game starts when both connect.";
           return;
         }
         startOnlineMatch(
@@ -6045,155 +6151,27 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
         onlineHostCharacter = match.host;
         onlineGuestCharacter = match.guest;
         onlineStage = stageIndex;
+        networkPausedForDisconnect = false;
+        $("room-badge").textContent =
+          networkMode === "phone-bot"
+            ? "ROOM " + roomCode + " · PHONE CONTROLLER CONNECTED · VS COMPUTER"
+            : "ROOM " + roomCode + " · BOTH PHONE CONTROLLERS CONNECTED";
         setStage(stageIndex);
         $("menu").style.display = "none";
         pw = 0;
         bw = 0;
         paused = false;
         onlineRound = 1;
+        if (networkMode === "phone-bot") {
+          bt = 0;
+          bi = {};
+        }
         newRound();
         if (announce)
           netSend({
             type: "matchStart",
             match: { host: match.host, guest: match.guest, stage: stageIndex },
           });
-      }
-      function serializeFighter(f) {
-        const result = {};
-        for (const [key, value] of Object.entries(f)) {
-          if (key === "m" || key === "cfg") continue;
-          if (
-            value === null ||
-            typeof value === "number" ||
-            typeof value === "string" ||
-            typeof value === "boolean"
-          )
-            result[key] = value;
-          else if (key === "atk" && value && typeof value === "object")
-            result.atk = { ...value };
-        }
-        return result;
-      }
-      function sendSnapshot() {
-        if (
-          networkRole !== "host" ||
-          !networkSocket ||
-          networkSocket.readyState !== WebSocket.OPEN ||
-          networkSocket.bufferedAmount > 4096
-        )
-          return;
-        netSend({
-          type: "snapshot",
-          snapshot: {
-            P: serializeFighter(P),
-            B: serializeFighter(B),
-            state,
-            stT,
-            timer,
-            tick,
-            msg,
-            sub,
-            paused,
-            frame,
-            roundWinner,
-            matchWinner: P.wins >= 2 ? "host" : B.wins >= 2 ? "guest" : null,
-            wins: [P.wins, B.wins],
-            round: pw + bw + 1,
-          },
-        });
-      }
-      function applyRemoteSnapshot() {
-        const snapshot = remoteSnapshot;
-        if (networkRole !== "guest" || !snapshot || !snapshot.P || !snapshot.B)
-          return;
-        const wins = Array.isArray(snapshot.wins) ? snapshot.wins : [0, 0];
-        if (P && B) {
-          P.wins = Number(wins[0]) || 0;
-          B.wins = Number(wins[1]) || 0;
-        }
-        const round = Number(snapshot.round);
-        if (Number.isInteger(round) && round !== onlineRound) {
-          if (P && B) {
-            P.wins = Number(wins[0]) || 0;
-            B.wins = Number(wins[1]) || 0;
-          }
-          newRound();
-          onlineRound = round;
-        }
-        for (const [fighter, data] of [
-          [P, snapshot.P],
-          [B, snapshot.B],
-        ]) {
-          const previousHp = fighter.hp,
-            previousAttack = fighter.atk;
-          for (const [key, value] of Object.entries(data)) {
-            if (key === "m" || key === "cfg" || !(key in fighter)) continue;
-            if (
-              (key === "x" || key === "y" || key === "z") &&
-              typeof value === "number"
-            )
-              fighter[key] = lerp(fighter[key], value, 0.42);
-            else if (key === "atk" && value && typeof value === "object")
-              fighter.atk = { ...value };
-            else if (
-              value === null ||
-              typeof value === "number" ||
-              typeof value === "string" ||
-              typeof value === "boolean"
-            )
-              fighter[key] = value;
-          }
-          if (typeof data.hp === "number" && data.hp < previousHp)
-            bloodBurst(
-              fighter.x,
-              fighter.y + (data.hz === "hi" ? 1.85 : 1.2),
-              fighter.z,
-              data.hp <= 0 ? 12 : 5,
-              fighter.face,
-            );
-          if (
-            data.atk &&
-            data.atk.type === "l" &&
-            data.atk.done &&
-            (!previousAttack ||
-              previousAttack.type !== "l" ||
-              !previousAttack.done)
-          ) {
-            const target = fighter === P ? B : P;
-            if (fighter.cfg.proj) spawnShot(fighter, true);
-            else
-              beams.push({
-                f: fighter,
-                l: 16,
-                o: null,
-                down: !!data.atk.downLaser,
-                target: data.atk.downLaser ? target : null,
-              });
-          }
-        }
-        state = snapshot.state;
-        stT = Number(snapshot.stT) || 0;
-        timer = Number(snapshot.timer) || 0;
-        tick = Number(snapshot.tick) || 0;
-        roundWinner = ["host", "guest", "draw"].includes(snapshot.roundWinner)
-          ? snapshot.roundWinner
-          : null;
-        msg = typeof snapshot.msg === "string" ? snapshot.msg : "";
-        sub = typeof snapshot.sub === "string" ? snapshot.sub : "";
-        if (state === "ko" && roundWinner) {
-          if (!/FINISH|FATALITY/.test(msg))
-            msg =
-              roundWinner === "draw"
-                ? "DRAW"
-                : roundWinner === "guest"
-                  ? "K.O. — YOU WIN"
-                  : "K.O. — YOU LOSE";
-        } else if (state === "match") {
-          msg =
-            snapshot.matchWinner === "guest" ? "FLAWLESS VICTORY" : "DEFEATED";
-          sub = "The host can restart the match from the lobby";
-        }
-        paused = !!snapshot.paused;
       }
       function disposeF(f) {
         if (f.m.bloodNose) S.remove(f.m.bloodNose);
@@ -6226,16 +6204,14 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
         attachHomelanderRig(B);
         $("n1").textContent =
           networkRole === "host"
-            ? "YOU · " + ROS[pick].name
-            : networkRole === "guest"
-              ? "FRIEND · " + ROS[pick].name
-              : ROS[pick].name;
+            ? (networkMode === "phone-bot" ? "YOU · " : "PLAYER 1 · ") +
+              ROS[pick].name
+            : ROS[pick].name;
         $("n2").textContent =
           networkRole === "host"
-            ? "FRIEND · " + ROS[opp].name
-            : networkRole === "guest"
-              ? "YOU · " + ROS[opp].name
-              : ROS[opp].name;
+            ? (networkMode === "phone-bot" ? "COMPUTER · " : "PLAYER 2 · ") +
+              ROS[opp].name
+            : ROS[opp].name;
         P.wins = pw;
         B.wins = bw;
         S.add(P.m.root, B.m.root);
@@ -6264,7 +6240,6 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
         sfx("round");
       }
       function restart() {
-        if (networkRole === "guest") return;
         if (networkRole === "host") {
           netSend({ type: "lobbyReset" });
           resetOnlineSelection();
@@ -8342,8 +8317,7 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
           Math.sin(frame * 0.041 + 1.3) * 0.3 +
           (gustT > 0 ? Math.sin(Math.PI * (1 - gustT / 90)) * 0.9 : 0);
         const slow = state === "ko" && stT < 60 && frame % 3 !== 0;
-        if (networkRole === "guest") applyRemoteSnapshot();
-        else if (hs > 0) hs--;
+        if (hs > 0) hs--;
         else if (!slow && !paused) {
           if (state === "intro" && stT > 45) {
             state = "fight";
@@ -8356,40 +8330,58 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
               tick = 0;
               timer--;
             }
-            if (networkRole !== "host" && --bt <= 0) botThink();
-            const opponentInput =
-              networkRole === "host" ? Object.assign({}, remoteInput) : bi;
-            if (networkRole === "host")
+            if (
+              (networkRole !== "host" || networkMode === "phone-bot") &&
+              --bt <= 0
+            )
+              botThink();
+            const playerOneInput =
+              networkRole === "host"
+                ? Object.assign({}, remoteInputs[0])
+                : {
+                    a: keys.a,
+                    d: keys.d,
+                    w: keys.w,
+                    j: keys.j,
+                    k: keys.k,
+                    l: keys.l,
+                    u: keys.u,
+                    o: keys.o,
+                    e: keys.e,
+                    i: keys.i,
+                    r: keys.r,
+                  };
+            const playerTwoInput =
+              networkRole === "host" && networkMode !== "phone-bot"
+                ? Object.assign({}, remoteInputs[1])
+                : bi;
+            if (networkRole === "host") {
               for (const key of INPUT_KEYS)
-                if (remotePressed[key]) opponentInput[key] = true;
-            step(P, B, {
-              a: keys.a,
-              d: keys.d,
-              w: keys.w,
-              j: keys.j,
-              k: keys.k,
-              l: keys.l,
-              u: keys.u,
-              o: keys.o,
-              e: keys.e,
-              i: keys.i,
-              r: keys.r,
-            });
-            step(B, P, opponentInput);
+                for (let player = 0; player < 2; player++)
+                  if (remotePresseds[player][key])
+                    (player === 0 ? playerOneInput : playerTwoInput)[key] =
+                      true;
+            }
+            step(P, B, playerOneInput);
+            step(B, P, playerTwoInput);
             if (networkRole === "host")
-              for (const key of INPUT_KEYS) remotePressed[key] = false;
-            else if (bi.j || bi.k || bi.u || bi.o || bi.e) {
+              remotePresseds = [{}, {}];
+            if (
+              (networkRole !== "host" || networkMode === "phone-bot") &&
+              (bi.j || bi.k || bi.u || bi.o || bi.e)
+            ) {
               bi.j = bi.k = bi.u = bi.o = bi.e = 0;
             }
             if (P.hp <= 0 || B.hp <= 0 || timer <= 0) {
               const w = P.hp === B.hp ? null : P.hp > B.hp ? P : B;
               roundWinner = w === P ? "host" : w === B ? "guest" : "draw";
               if (w) w.wins++;
-              msg = w
-                ? w === P
-                  ? "K.O. — YOU WIN"
-                  : "K.O. — YOU LOSE"
-                : "DRAW";
+              if (!w) msg = "DRAW";
+              else if (networkRole === "host" && networkMode === "phone-bot")
+                msg = w === P ? "YOU WIN" : "COMPUTER WINS";
+              else if (networkRole === "host")
+                msg = w === P ? "PLAYER 1 WINS" : "PLAYER 2 WINS";
+              else msg = w === P ? "K.O. — YOU WIN" : "K.O. — YOU LOSE";
               state = "ko";
               stT = 0;
               koA = koB = 0;
@@ -8401,7 +8393,6 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
             if (B.hp <= 0) B.koT++;
             const decided =
               (P.wins >= 2 || B.wins >= 2) &&
-              networkRole !== "guest" &&
               (P.hp <= 0 || B.hp <= 0);
             if (decided) {
               const L = P.hp <= 0 ? P : B,
@@ -8433,14 +8424,26 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
             if (stT > (P.wins >= 2 || B.wins >= 2 ? 175 : 100)) {
               if (P.wins >= 2 || B.wins >= 2) {
                 state = "match";
-                msg = P.wins >= 2 ? "FLAWLESS VICTORY" : "DEFEATED";
-                sub = "Press Enter or tap to play again";
+                if (networkRole === "host" && networkMode === "phone-bot") {
+                  msg = P.wins >= 2 ? "YOU WIN" : "COMPUTER WINS";
+                  sub = "Press Enter on the laptop to choose fighters again";
+                } else {
+                  msg =
+                    networkRole === "host"
+                      ? P.wins >= 2
+                        ? "PLAYER 1 WINS"
+                        : "PLAYER 2 WINS"
+                      : P.wins >= 2
+                        ? "FLAWLESS VICTORY"
+                        : "DEFEATED";
+                  sub = networkRole === "host"
+                    ? "Press Enter to choose fighters again"
+                    : "Press Enter or tap to play again";
+                }
               } else newRound();
             }
           }
         }
-        if (networkRole === "host" && state !== "select" && frame % 2 === 0)
-          sendSnapshot();
         const over = state === "ko" || state === "match";
         pose(P, over && P.hp > B.hp);
         pose(B, over && B.hp > P.hp);
@@ -8609,29 +8612,55 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
         howSeen = false;
       function loop(t) {
         requestAnimationFrame(loop);
+        if (document.hidden || $("home").style.display !== "none") {
+          lastT = t === undefined ? performance.now() : t;
+          accT = nT = simAcc = 0;
+          return;
+        }
         if (t !== undefined) {
           const dt = t - lastT;
           lastT = t;
           if (dt < 250) {
             accT += dt;
-            if (++nT >= 90) {
+            if (++nT >= 45) {
               const av = accT / nT;
               accT = nT = 0;
-              if (av > 21 && pr > 0.75) {
-                pr = Math.max(0.75, pr - 0.25);
+              if (av > 21 && pr > 0.5) {
+                pr = Math.max(0.5, pr - 0.25);
                 R.setPixelRatio(pr);
                 resize();
               } else if (
                 av > 24 &&
-                pr <= 0.75 &&
+                pr <= 0.5 &&
                 bloomPass &&
                 bloomPass.enabled
               ) {
                 bloomPass.enabled = false;
-              } else if (av < 14.5 && pr < PR_MAX) {
+              } else if (
+                av > 24 &&
+                pr <= 0.5 &&
+                bloomPass &&
+                !bloomPass.enabled &&
+                postEnabled
+              ) {
+                postEnabled = false;
+              } else if (
+                av > 24 &&
+                pr <= 0.5 &&
+                !postEnabled &&
+                R.shadowMap.enabled
+              ) {
+                R.shadowMap.enabled = false;
+              } else if (av < 17.5 && pr < PR_MAX) {
                 pr = Math.min(PR_MAX, pr + 0.25);
                 R.setPixelRatio(pr);
                 resize();
+              } else if (av < 17.5 && !LOW_POWER && !R.shadowMap.enabled) {
+                R.shadowMap.enabled = true;
+              } else if (av < 17.5 && !LOW_POWER && !postEnabled) {
+                postEnabled = true;
+              } else if (av < 17.5 && !LOW_POWER && bloomPass) {
+                bloomPass.enabled = true;
               }
             }
           }
@@ -8644,7 +8673,7 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
           n++;
         }
         if (!n) return;
-        if (composer && gradePass) {
+        if (composer && gradePass && postEnabled) {
           const u = gradePass.uniforms;
           u.aberr.value = Math.min(0.6, shake * 1.5 + hs * 0.03);
           u.vig.value = 0.34 + Math.min(0.22, shake * 0.3);
@@ -8657,6 +8686,7 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
       // ===== real 3D portraits for the select screen =====
       let PORT = [];
       function makePortraits() {
+        if (LOW_POWER) return;
         try {
           const sc = new THREE.Scene(),
             pc = new THREE.PerspectiveCamera(26, 0.75, 0.1, 60);
@@ -8722,6 +8752,7 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
             R.render(sc, pc);
             PORT[i] = R.domElement.toDataURL("image/jpeg", 0.88);
             sc.remove(m.root);
+            disposeF(f);
           });
           R.setPixelRatio(oldPR);
           resize();
@@ -9889,7 +9920,7 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
             }
           } else if (
             f === B &&
-            !networkRole &&
+            (!networkRole || networkMode === "phone-bot") &&
             fight &&
             !(f.cbCd > 0) &&
             !f.down &&
@@ -10480,7 +10511,7 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
     <script>
       /* ===== CINEMATIC STAGE UPGRADE: real HDRI lighting + Sponza ruined-temple stage ===== */
       (() => {
-        const A = "assets/",
+        const         A = "",
           envs = {},
           orig = S.environment,
           hemi = S.children.find((o) => o.isHemisphereLight);

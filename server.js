@@ -12,22 +12,30 @@ const { WebSocketServer, WebSocket } = require('ws');
 // ---------------------------------------------------------------------------
 const root = __dirname;
 const PORT = Number(process.env.PORT) || 3000;
-const MAX_MESSAGES_PER_SECOND = 240;      // host sends snapshots + pings, so keep headroom
+const MAX_MESSAGES_PER_SECOND = 240;      // Leave headroom for button updates and pings.
 const MAX_ROOMS = 5000;
 const HEARTBEAT_MS = 15000;               // protocol-level ping: drops dead peers, keeps proxies awake
-const SNAPSHOT_BACKPRESSURE_BYTES = 8192; // skip snapshots if guest's socket is already backed up
+const INPUT_BACKPRESSURE_BYTES = 8192;
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '')
   .split(',').map(s => s.trim()).filter(Boolean); // optional, e.g. "https://mygame.com"
 
 const allowedFiles = new Set([
   'index.html',
+  'controller.html',
+  'GLTFLoader.js',
+  'RGBELoader.js',
   'homelander.glb',
   'homelander-optimized.glb',
-  'omniman.glb'
+  'omniman.glb',
+  'pedestrian_overpass_1k.hdr',
+  'royal_esplanade_1k.hdr',
+  'sponza.glb'
 ]);
 const contentTypes = {
   '.html': 'text/html; charset=utf-8',
-  '.glb': 'model/gltf-binary'
+  '.js': 'text/javascript; charset=utf-8',
+  '.glb': 'model/gltf-binary',
+  '.hdr': 'application/octet-stream'
 };
 const compressibleTypes = new Set(['.html']);
 
@@ -101,23 +109,27 @@ function normalizeCode(value) {
 function leaveRoom(socket) {
   const room = socket.room;
   if (!room) return;
+  const role = socket.role;
   socket.room = null;
   socket.role = null;
+  const player = socket.player;
+  socket.player = null;
   if (room.host === socket) {
-    if (room.guest) {
-      // Fix: previously the guest kept a stale room reference and could never join another room.
-      room.guest.room = null;
-      room.guest.role = null;
-      send(room.guest, { type: 'peerLeft' });
+    for (const controller of room.controllers) {
+      if (!controller) continue;
+      controller.room = null;
+      controller.role = null;
+      controller.player = null;
+      send(controller, { type: 'roomClosed' });
     }
     rooms.delete(room.code);
-  } else if (room.guest === socket) {
-    room.guest = null;
-    send(room.host, { type: 'peerLeft' });
+  } else if (role === 'controller' && Number.isInteger(player)) {
+    room.controllers[player - 1] = null;
+    send(room.host, { type: 'controllerLeft', player });
   }
 }
 
-function routeMessage(socket, message, text) {
+function routeMessage(socket, message) {
   const type = message.type;
   if (typeof type !== 'string') return sendError(socket, 'Invalid message.');
 
@@ -129,11 +141,13 @@ function routeMessage(socket, message, text) {
   if (type === 'create') {
     if (socket.room) leaveRoom(socket); // no more "already in a room" dead end
     if (rooms.size >= MAX_ROOMS) return sendError(socket, 'Server is busy. Try again shortly.');
-    const room = { code: makeRoomCode(), host: socket, guest: null };
+    const mode = message.mode === 'phone-bot' ? 'phone-bot' : 'duo';
+    const controllerLimit = mode === 'phone-bot' ? 1 : 2;
+    const room = { code: makeRoomCode(), host: socket, controllers: [null, null], mode, controllerLimit };
     rooms.set(room.code, room);
     socket.room = room;
     socket.role = 'host';
-    return send(socket, { type: 'created', code: room.code });
+    return send(socket, { type: 'created', code: room.code, mode, controllerLimit, controllers: [false, false] });
   }
 
   if (type === 'join') {
@@ -141,13 +155,19 @@ function routeMessage(socket, message, text) {
     const room = rooms.get(code);
     if (!room) return sendError(socket, 'Room not found. Check the code and try again.');
     if (socket.room === room) return; // already in this room
-    if (room.guest) return sendError(socket, 'That room already has two players.');
+    const playerIndex = room.controllers.indexOf(null);
+    if (playerIndex < 0 || playerIndex >= room.controllerLimit) {
+      return sendError(socket, room.controllerLimit === 1
+        ? 'This game already has its phone controller connected.'
+        : 'Both phone controllers are already connected.');
+    }
     if (socket.room) leaveRoom(socket);
-    room.guest = socket;
+    room.controllers[playerIndex] = socket;
     socket.room = room;
-    socket.role = 'guest';
-    send(socket, { type: 'joined', code });
-    send(room.host, { type: 'peerJoined' });
+    socket.role = 'controller';
+    socket.player = playerIndex + 1;
+    send(socket, { type: 'joined', code, mode: room.mode, player: socket.player });
+    send(room.host, { type: 'controllerJoined', player: socket.player });
     return;
   }
 
@@ -156,10 +176,9 @@ function routeMessage(socket, message, text) {
   const room = socket.room;
   if (!room) return sendError(socket, 'Join a room first.');
   const isHost = socket.role === 'host';
-  const target = isHost ? room.guest : room.host;
-  if (!target) return;
+  const target = isHost ? null : room.host;
 
-  if (!isHost && type === 'input') {
+  if (!isHost && socket.role === 'controller' && type === 'input') {
     const input = message.input;
     if (!input || typeof input !== 'object' || Array.isArray(input)) return;
     const pressedIn = message.pressed && typeof message.pressed === 'object' ? message.pressed : null;
@@ -173,27 +192,14 @@ function routeMessage(socket, message, text) {
       if (p) anyPressed = true;
     }
     // Under congestion, drop plain held-key updates but never a fresh key press.
-    if (!anyPressed && target.bufferedAmount > SNAPSHOT_BACKPRESSURE_BYTES) return;
-    return send(target, { type: 'input', input: cleanInput, pressed: cleanPressed });
+    if (!anyPressed && target.bufferedAmount > INPUT_BACKPRESSURE_BYTES) return;
+    return send(target, { type: 'input', player: socket.player, input: cleanInput, pressed: cleanPressed });
   }
 
-  if (type === 'selection') {
-    if (typeof message.character !== 'string' || message.character.length > 32) return;
-    return send(target, { type: 'selection', character: message.character });
-  }
-
-  if (isHost && type === 'snapshot') {
-    if (target.bufferedAmount > SNAPSHOT_BACKPRESSURE_BYTES) return; // newest state matters more than old
-    if (!message.snapshot || typeof message.snapshot !== 'object') return;
-    return send(target, text); // forward the original text: no re-serialization on the hot path
-  }
-
-  if (isHost && type === 'matchStart') {
-    return send(target, { type: 'matchStart', match: message.match });
-  }
-
-  if (isHost && type === 'lobbyReset') {
-    return send(target, { type: 'lobbyReset' });
+  if (isHost && (type === 'matchStart' || type === 'lobbyReset')) {
+    for (const controller of room.controllers) {
+      if (controller) send(controller, { type });
+    }
   }
 }
 
@@ -217,7 +223,7 @@ const server = http.createServer(async (request, response) => {
     return;
   }
 
-  const filename = pathname === '/' ? 'index.html' : pathname.slice(1);
+  const filename = pathname === '/' ? 'index.html' : pathname === '/controller' ? 'controller.html' : pathname.slice(1);
   const isHead = request.method === 'HEAD';
   if ((request.method !== 'GET' && !isHead) || !allowedFiles.has(filename)) {
     response.writeHead(404, baseHeaders).end('Not found');
@@ -326,7 +332,7 @@ webSockets.on('connection', socket => {
       sendError(socket, 'Invalid message.');
       return;
     }
-    routeMessage(socket, message, text);
+    routeMessage(socket, message);
   });
   socket.on('close', () => leaveRoom(socket));
   socket.on('error', () => leaveRoom(socket));

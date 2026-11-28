@@ -1,0 +1,864 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no"
+    />
+    <meta name="theme-color" content="#080a12" />
+    <title>Phone Controller · HOMELANDER 3D</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+        background: #080a12;
+        color: #f5f3ed;
+        font-synthesis: none;
+        text-rendering: optimizeLegibility;
+        -webkit-tap-highlight-color: transparent;
+        --gold: #f2bf4a;
+        --blue: #70dcff;
+        --muted: #9da2b4;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        touch-action: none;
+        user-select: none;
+        -webkit-user-select: none;
+        overscroll-behavior: none;
+      }
+      body {
+        min-height: 100dvh;
+        background:
+          radial-gradient(ellipse at 50% -12%, rgba(52, 70, 116, 0.4), transparent 58%),
+          radial-gradient(ellipse at 0% 100%, rgba(104, 49, 26, 0.16), transparent 42%),
+          #080a12;
+      }
+      button,
+      input {
+        color: inherit;
+        font: inherit;
+      }
+      .screen {
+        display: none;
+        width: 100%;
+        height: 100%;
+        min-height: 100dvh;
+      }
+      .screen.active {
+        display: flex;
+      }
+      #join-screen {
+        align-items: center;
+        justify-content: center;
+        padding: max(24px, env(safe-area-inset-top)) 22px
+          max(24px, env(safe-area-inset-bottom));
+      }
+      .join-card {
+        width: min(100%, 410px);
+        padding: 30px 24px 24px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 26px;
+        background: linear-gradient(145deg, rgba(28, 31, 45, 0.96), rgba(15, 17, 26, 0.98));
+        box-shadow: 0 24px 80px #0009, inset 0 1px #ffffff12;
+        text-align: center;
+      }
+      .brand-mark {
+        display: grid;
+        width: 54px;
+        height: 54px;
+        margin: 0 auto 18px;
+        place-items: center;
+        border: 1px solid #f2bf4a66;
+        border-radius: 17px;
+        background: #f2bf4a12;
+        color: var(--gold);
+        font-size: 26px;
+        font-weight: 900;
+        box-shadow: 0 0 28px #f2bf4a18;
+      }
+      h1 {
+        margin: 0;
+        font-size: clamp(23px, 7vw, 31px);
+        letter-spacing: 0.12em;
+      }
+      .intro {
+        margin: 10px 0 25px;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      label {
+        display: block;
+        margin: 0 0 8px;
+        color: #c9cbd5;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.17em;
+        text-align: left;
+      }
+      #room-code {
+        width: 100%;
+        height: 58px;
+        border: 1px solid #ffffff24;
+        border-radius: 14px;
+        outline: none;
+        background: #090b13;
+        text-align: center;
+        text-transform: uppercase;
+        letter-spacing: 0.3em;
+        font-size: 22px;
+        font-weight: 900;
+      }
+      #room-code:focus {
+        border-color: var(--gold);
+        box-shadow: 0 0 0 3px #f2bf4a1f;
+      }
+      .primary,
+      .secondary {
+        min-height: 52px;
+        border-radius: 14px;
+        font-weight: 850;
+        letter-spacing: 0.1em;
+        cursor: pointer;
+      }
+      .primary {
+        width: 100%;
+        margin-top: 12px;
+        border: 0;
+        background: linear-gradient(110deg, #f3c44e, #f18a38);
+        color: #18120a;
+        box-shadow: 0 8px 26px #e99b3433;
+      }
+      .primary:disabled {
+        opacity: 0.55;
+      }
+      .secondary {
+        padding: 0 16px;
+        border: 1px solid #ffffff24;
+        background: #ffffff09;
+        font-size: 12px;
+      }
+      #join-status {
+        min-height: 20px;
+        margin: 13px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      #join-status.error {
+        color: #ff8e86;
+      }
+      .controller {
+        flex-direction: column;
+        padding: max(12px, env(safe-area-inset-top)) 16px
+          max(12px, env(safe-area-inset-bottom));
+        gap: 12px;
+      }
+      .topbar {
+        display: flex;
+        min-height: 46px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .identity {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 10px;
+      }
+      .player-badge {
+        display: grid;
+        width: 42px;
+        height: 42px;
+        flex: 0 0 auto;
+        place-items: center;
+        border: 1px solid #70dcff66;
+        border-radius: 13px;
+        background: #70dcff14;
+        color: var(--blue);
+        font-size: 17px;
+        font-weight: 900;
+      }
+      .player-name {
+        overflow: hidden;
+        font-size: 13px;
+        font-weight: 900;
+        letter-spacing: 0.1em;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .connection {
+        margin-top: 3px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .connection::before {
+        display: inline-block;
+        width: 7px;
+        height: 7px;
+        margin-right: 6px;
+        border-radius: 50%;
+        background: #e6ad46;
+        content: "";
+      }
+      .connection.online::before {
+        background: #6bea9a;
+        box-shadow: 0 0 10px #6bea9a99;
+      }
+      .connection.error::before {
+        background: #ff7770;
+      }
+      .connection.slow::before {
+        background: #f2bf4a;
+      }
+      .top-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .room-label {
+        color: #b7bac7;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+      }
+      .topbar .secondary {
+        min-height: 38px;
+        padding: 0 12px;
+      }
+      .combo-toggle {
+        border-color: #f2bf4a55;
+        color: var(--gold);
+        font-size: 10px;
+      }
+      .arena {
+        display: grid;
+        min-height: 0;
+        flex: 1;
+        grid-template-columns: minmax(150px, 0.85fr) minmax(230px, 1.15fr);
+        align-items: center;
+        gap: clamp(12px, 5vw, 48px);
+        padding: 0 clamp(4px, 3vw, 34px);
+      }
+      .move-controls {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(56px, 86px));
+        grid-template-rows: repeat(2, minmax(58px, 86px));
+        justify-content: center;
+        gap: 10px;
+      }
+      .move-controls [data-key="w"] {
+        grid-column: 2;
+        grid-row: 1;
+      }
+      .move-controls [data-key="a"] {
+        grid-column: 1;
+        grid-row: 2;
+      }
+      .move-controls [data-key="l"] {
+        grid-column: 2;
+        grid-row: 2;
+      }
+      .move-controls [data-key="d"] {
+        grid-column: 3;
+        grid-row: 2;
+      }
+      .actions {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(58px, 88px));
+        grid-template-rows: repeat(2, minmax(58px, 88px));
+        justify-content: center;
+        gap: clamp(8px, 2.4vw, 16px);
+      }
+      .pad-button {
+        position: relative;
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 3px;
+        border: 1px solid #ffffff24;
+        border-radius: 23px;
+        background: linear-gradient(145deg, #ffffff17, #ffffff08);
+        box-shadow: inset 0 1px #ffffff16, 0 8px 18px #0005;
+        touch-action: none;
+        -webkit-touch-callout: none;
+        cursor: pointer;
+        transition:
+          transform 80ms ease,
+          border-color 80ms ease,
+          background 80ms ease,
+          box-shadow 80ms ease;
+      }
+      .pad-button .icon {
+        font-size: clamp(20px, 6vw, 27px);
+        line-height: 1;
+      }
+      .pad-button .caption {
+        color: #d3d5de;
+        font-size: 9px;
+        font-weight: 900;
+        letter-spacing: 0.09em;
+      }
+      .pad-button:active,
+      .pad-button.pressed {
+        transform: scale(0.94);
+        border-color: #f2bf4a99;
+        background: linear-gradient(145deg, #f2bf4a48, #f2bf4a1c);
+        box-shadow: 0 0 20px #f2bf4a22, inset 0 1px #ffffff22;
+      }
+      .pad-button.move {
+        border-radius: 50%;
+        background: linear-gradient(145deg, #263044, #151b28);
+      }
+      .pad-button.attack {
+        border-color: #f2bf4a42;
+      }
+      .pad-button.special {
+        border-color: #bd82ff55;
+        background: linear-gradient(145deg, #9b64db30, #ffffff08);
+      }
+      .pad-button.utility {
+        background: linear-gradient(145deg, #70dcff20, #ffffff07);
+      }
+      .hint {
+        min-height: 22px;
+        color: #9196a8;
+        font-size: 11px;
+        text-align: center;
+      }
+      .hint strong {
+        color: #dfe1e8;
+      }
+      #combo-guide[hidden] {
+        display: none;
+      }
+      .combo-backdrop {
+        position: fixed;
+        z-index: 20;
+        display: grid;
+        place-items: center;
+        padding: max(16px, env(safe-area-inset-top)) 16px
+          max(16px, env(safe-area-inset-bottom));
+        background: #05060bd9;
+        backdrop-filter: blur(8px);
+        inset: 0;
+        touch-action: auto;
+      }
+      .combo-card {
+        width: min(460px, 100%);
+        max-height: 100%;
+        overflow-y: auto;
+        padding: 20px;
+        border: 1px solid #f2bf4a55;
+        border-radius: 22px;
+        background: linear-gradient(145deg, #1a1d2b, #10121c);
+        box-shadow: 0 24px 80px #000b, inset 0 1px #ffffff12;
+        touch-action: pan-y;
+      }
+      .combo-heading {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+      .combo-heading h2 {
+        margin: 0;
+        color: var(--gold);
+        font-size: 18px;
+        letter-spacing: 0.12em;
+      }
+      .combo-heading p {
+        margin: 5px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.4;
+      }
+      .combo-close {
+        min-height: 38px;
+        flex: 0 0 auto;
+        padding: 0 12px;
+      }
+      .combo-list {
+        display: grid;
+        gap: 9px;
+      }
+      .combo-entry {
+        display: grid;
+        gap: 8px;
+        padding: 12px;
+        border: 1px solid #ffffff14;
+        border-radius: 14px;
+        background: #ffffff08;
+      }
+      .combo-entry h3 {
+        margin: 0;
+        font-size: 12px;
+        letter-spacing: 0.08em;
+      }
+      .combo-entry p {
+        margin: 3px 0 0;
+        color: var(--muted);
+        font-size: 11px;
+        line-height: 1.35;
+      }
+      .combo-sequence {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 5px;
+      }
+      .combo-step {
+        padding: 5px 7px;
+        border: 1px solid #f2bf4a40;
+        border-radius: 7px;
+        background: #f2bf4a12;
+        color: #ffe3a0;
+        font-size: 9px;
+        font-weight: 900;
+        letter-spacing: 0.04em;
+        white-space: nowrap;
+      }
+      .combo-arrow {
+        color: #898da0;
+        font-size: 11px;
+      }
+      .combo-note {
+        margin: 12px 2px 0;
+        color: #d0d2dc;
+        font-size: 11px;
+        line-height: 1.5;
+      }
+      @media (orientation: portrait) {
+        .controller {
+          gap: 9px;
+        }
+        .arena {
+          grid-template-columns: 1fr;
+          grid-template-rows: 0.85fr 1.15fr;
+          gap: 12px;
+          padding: 0 4px;
+        }
+        .move-controls {
+          grid-template-columns: repeat(4, minmax(52px, 74px));
+          grid-template-rows: minmax(56px, 74px);
+          gap: 12px;
+        }
+        .move-controls [data-key="a"] {
+          grid-column: 1;
+          grid-row: 1;
+        }
+        .move-controls [data-key="w"] {
+          grid-column: 2;
+          grid-row: 1;
+        }
+        .move-controls [data-key="d"] {
+          grid-column: 3;
+          grid-row: 1;
+        }
+        .move-controls [data-key="l"] {
+          grid-column: 4;
+          grid-row: 1;
+        }
+        .actions {
+          grid-template-columns: repeat(4, minmax(54px, 76px));
+          grid-template-rows: repeat(2, minmax(62px, 80px));
+          gap: 9px;
+        }
+        .pad-button {
+          border-radius: 20px;
+        }
+        .pad-button .caption {
+          font-size: 8px;
+        }
+      }
+      @media (max-height: 440px) and (orientation: landscape) {
+        .controller {
+          gap: 5px;
+          padding-top: max(6px, env(safe-area-inset-top));
+          padding-bottom: max(6px, env(safe-area-inset-bottom));
+        }
+        .topbar {
+          min-height: 36px;
+        }
+        .player-badge {
+          width: 34px;
+          height: 34px;
+        }
+        .move-controls {
+          grid-template-rows: repeat(2, minmax(44px, 64px));
+        }
+        .actions {
+          grid-template-rows: repeat(2, minmax(44px, 64px));
+        }
+        .pad-button {
+          border-radius: 18px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main id="join-screen" class="screen active">
+      <section class="join-card">
+        <div class="brand-mark" aria-hidden="true">H</div>
+        <h1>PHONE CONTROLLER</h1>
+        <p class="intro">Join the game on your laptop. Keep this page open to play.</p>
+        <label for="room-code">6-LETTER ROOM CODE</label>
+        <input
+          id="room-code"
+          autocomplete="one-time-code"
+          autocapitalize="characters"
+          maxlength="6"
+          placeholder="ABC123"
+          aria-label="Six letter room code"
+        />
+        <button id="join-button" class="primary" type="button">JOIN GAME</button>
+        <p id="join-status" role="status" aria-live="polite"></p>
+      </section>
+    </main>
+    <main id="controller-screen" class="screen controller">
+      <header class="topbar">
+        <div class="identity">
+          <div class="player-badge" id="player-badge">1</div>
+          <div>
+            <div class="player-name" id="player-name">PLAYER 1</div>
+            <div class="connection" id="connection-status">Connecting…</div>
+          </div>
+        </div>
+        <div class="top-actions">
+          <span class="room-label" id="room-label"></span>
+          <button
+            class="secondary combo-toggle"
+            id="combo-toggle"
+            type="button"
+            aria-controls="combo-guide"
+            aria-expanded="false"
+          >
+            COMBOS
+          </button>
+          <button class="secondary" id="leave-button" type="button">LEAVE</button>
+        </div>
+      </header>
+      <section class="arena" aria-label="Game controls">
+        <div class="move-controls">
+          <button class="pad-button move" data-key="w" aria-label="Jump" type="button"><span class="icon">▲</span><span class="caption">JUMP</span></button>
+          <button class="pad-button move" data-key="a" aria-label="Move left" type="button"><span class="icon">◀</span><span class="caption">LEFT</span></button>
+          <button class="pad-button move" data-key="l" aria-label="Block or move down while flying" type="button"><span class="icon">⬟</span><span class="caption">BLOCK</span></button>
+          <button class="pad-button move" data-key="d" aria-label="Move right" type="button"><span class="icon">▶</span><span class="caption">RIGHT</span></button>
+        </div>
+        <div class="actions">
+          <button class="pad-button attack" data-key="j" aria-label="Punch" type="button"><span class="icon">👊</span><span class="caption">PUNCH</span></button>
+          <button class="pad-button attack" data-key="k" aria-label="Kick" type="button"><span class="icon">🦵</span><span class="caption">KICK</span></button>
+          <button class="pad-button utility" data-key="u" aria-label="Hero power" type="button"><span class="icon">✦</span><span class="caption">POWER</span></button>
+          <button class="pad-button special" data-key="e" aria-label="Special attack" type="button"><span class="icon">✧</span><span class="caption">SPECIAL</span></button>
+          <button class="pad-button utility" data-key="o" aria-label="Uppercut" type="button"><span class="icon">⤴</span><span class="caption">UPPERCUT</span></button>
+          <button class="pad-button utility" data-key="r" aria-label="Speed burst" type="button"><span class="icon">⚡</span><span class="caption">BURST</span></button>
+          <button class="pad-button utility" data-key="i" aria-label="Flight or mobility" type="button"><span class="icon">↟</span><span class="caption">MOBILITY</span></button>
+        </div>
+      </section>
+      <div class="hint"><strong>Hold</strong> movement and block · <strong>Tap</strong> attacks · You can press multiple buttons</div>
+    </main>
+    <div
+      class="combo-backdrop"
+      id="combo-guide"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="combo-title"
+      hidden
+    >
+      <section class="combo-card">
+        <header class="combo-heading">
+          <div>
+            <h2 id="combo-title">COMBO GUIDE</h2>
+            <p>Tap and release each controller button in order.</p>
+          </div>
+          <button class="secondary combo-close" id="combo-close" type="button">CLOSE</button>
+        </header>
+        <div class="combo-list">
+          <article class="combo-entry">
+            <div>
+              <h3>SPIN BREAKER</h3>
+              <p>Roundhouse with bonus damage</p>
+            </div>
+            <div class="combo-sequence" aria-label="Punch twice, then kick">
+              <span class="combo-step">PUNCH ×2</span><span class="combo-arrow" aria-hidden="true">→</span><span class="combo-step">KICK</span>
+            </div>
+          </article>
+          <article class="combo-entry">
+            <div>
+              <h3>RISING DRAGON</h3>
+              <p>Launcher with a flip</p>
+            </div>
+            <div class="combo-sequence" aria-label="Punch twice, kick, then uppercut">
+              <span class="combo-step">PUNCH ×2</span><span class="combo-arrow" aria-hidden="true">→</span><span class="combo-step">KICK</span><span class="combo-arrow" aria-hidden="true">→</span><span class="combo-step">UPPERCUT</span>
+            </div>
+          </article>
+          <article class="combo-entry">
+            <div>
+              <h3>GROUND POUNDER</h3>
+              <p>Shockwave slam</p>
+            </div>
+            <div class="combo-sequence" aria-label="Kick twice, then punch">
+              <span class="combo-step">KICK ×2</span><span class="combo-arrow" aria-hidden="true">→</span><span class="combo-step">PUNCH</span>
+            </div>
+          </article>
+          <article class="combo-entry">
+            <div>
+              <h3>HERO FINISHER</h3>
+              <p>Signature strike · 8-second cooldown</p>
+            </div>
+            <div class="combo-sequence" aria-label="Punch twice, kick twice, then mobility">
+              <span class="combo-step">PUNCH ×2</span><span class="combo-arrow" aria-hidden="true">→</span><span class="combo-step">KICK ×2</span><span class="combo-arrow" aria-hidden="true">→</span><span class="combo-step">MOBILITY</span>
+            </div>
+          </article>
+        </div>
+        <p class="combo-note">Tap each button within about 0.4 seconds of the previous tap. The finisher works when its cooldown is ready.</p>
+      </section>
+    </div>
+    <script>
+      (() => {
+        const $ = (id) => document.getElementById(id);
+        const keys = new Set();
+        const roomInput = $("room-code");
+        const joinStatus = $("join-status");
+        const joinButton = $("join-button");
+        const joinScreen = $("join-screen");
+        const controllerScreen = $("controller-screen");
+        let socket = null;
+        let player = 0;
+        let roomCode = "";
+        let roomMode = "duo";
+        let pingId = 0;
+        let pingSentAt = 0;
+        let pingTimer = 0;
+
+        const initialRoom = new URLSearchParams(location.search).get("room");
+        if (initialRoom) roomInput.value = initialRoom.replace(/[^A-Za-z0-9]/g, "").slice(0, 6).toUpperCase();
+        roomInput.addEventListener("input", () => {
+          roomInput.value = roomInput.value.replace(/[^A-Za-z0-9]/g, "").slice(0, 6).toUpperCase();
+        });
+
+        function setJoinStatus(text, isError) {
+          joinStatus.textContent = text;
+          joinStatus.classList.toggle("error", !!isError);
+        }
+
+        function setConnection(text, state) {
+          const element = $("connection-status");
+          element.textContent = text;
+          element.classList.toggle("online", state === "online");
+          element.classList.toggle("error", state === "error");
+          element.classList.toggle("slow", state === "slow");
+        }
+
+        function clearKeys() {
+          if (!keys.size) return;
+          keys.clear();
+          document.querySelectorAll(".pad-button.pressed").forEach((button) => button.classList.remove("pressed"));
+          sendInput();
+        }
+
+        function sendInput(pressedKeys) {
+          if (!socket || socket.readyState !== WebSocket.OPEN) return;
+          const input = {};
+          const pressed = {};
+          for (const key of ["a", "d", "w", "j", "k", "l", "u", "o", "e", "i", "r"]) {
+            input[key] = keys.has(key);
+            pressed[key] = !!pressedKeys && pressedKeys.has(key);
+          }
+          socket.send(JSON.stringify({ type: "input", input, pressed }));
+        }
+
+        function leave(message) {
+          clearInterval(pingTimer);
+          pingTimer = 0;
+          clearKeys();
+          if (socket) {
+            const current = socket;
+            socket = null;
+            current.close();
+          }
+          setConnection(message || "Disconnected", "error");
+          setJoinStatus(message || "Disconnected.", true);
+          controllerScreen.classList.remove("active");
+          joinScreen.classList.add("active");
+        }
+
+        function connect() {
+          if (socket && socket.readyState < WebSocket.CLOSING) return;
+          roomCode = roomInput.value.trim().toUpperCase();
+          if (roomCode.length !== 6) {
+            setJoinStatus("Enter the six-character code shown on the laptop.", true);
+            roomInput.focus();
+            return;
+          }
+          joinButton.disabled = true;
+          setJoinStatus("Connecting to the game…", false);
+          const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+          const connection = new WebSocket(protocol + "//" + location.host + "/ws");
+          socket = connection;
+          connection.addEventListener("open", () => {
+            if (socket === connection) connection.send(JSON.stringify({ type: "join", code: roomCode }));
+          });
+          connection.addEventListener("message", (event) => {
+            if (socket !== connection) return;
+            let message;
+            try {
+              message = JSON.parse(event.data);
+            } catch {
+              leave("The server sent an invalid response.");
+              return;
+            }
+            if (message.type === "error") {
+              socket = null;
+              connection.close();
+              joinButton.disabled = false;
+              setJoinStatus(message.message || "Could not join this room.", true);
+              return;
+            }
+            if (message.type === "joined" && Number.isInteger(message.player) && message.player >= 1 && message.player <= 2) {
+              player = message.player;
+              roomMode = message.mode === "phone-bot" ? "phone-bot" : "duo";
+              $("player-badge").textContent = String(player);
+              $("player-name").textContent = "PLAYER " + player;
+              $("room-label").textContent = "ROOM " + roomCode;
+              joinScreen.classList.remove("active");
+              controllerScreen.classList.add("active");
+              setConnection(
+                roomMode === "phone-bot"
+                  ? "Connected · versus computer"
+                  : "Connected · waiting for the game",
+                "online",
+              );
+              joinButton.disabled = false;
+              history.replaceState(null, "", "/controller?room=" + encodeURIComponent(roomCode));
+              if (pingTimer) clearInterval(pingTimer);
+              pingTimer = setInterval(() => {
+                if (socket !== connection || connection.readyState !== WebSocket.OPEN) return;
+                pingId++;
+                pingSentAt = performance.now();
+                connection.send(JSON.stringify({ type: "ping", id: pingId }));
+              }, 3000);
+              return;
+            }
+            if (message.type === "matchStart")
+              setConnection(
+                roomMode === "phone-bot"
+                  ? "Match in progress · versus computer"
+                  : "Connected · match in progress",
+                "online",
+              );
+            else if (message.type === "lobbyReset")
+              setConnection(
+                roomMode === "phone-bot"
+                  ? "Connected · versus computer"
+                  : "Connected · waiting for the game",
+                "online",
+              );
+            else if (message.type === "pong" && message.id === pingId) {
+              const latency = Math.round(performance.now() - pingSentAt);
+              setConnection("Connected · " + latency + " ms", latency > 180 ? "slow" : "online");
+            } else if (message.type === "roomClosed") leave("The laptop closed the game room.");
+          });
+          connection.addEventListener("error", () => {
+            if (socket === connection) setJoinStatus("Could not reach the game server. Check your connection and try again.", true);
+          });
+          connection.addEventListener("close", () => {
+            if (socket !== connection) return;
+            socket = null;
+            clearInterval(pingTimer);
+            pingTimer = 0;
+            joinButton.disabled = false;
+            clearKeys();
+            controllerScreen.classList.remove("active");
+            joinScreen.classList.add("active");
+            setJoinStatus("Connection lost. Check the room code and try again.", true);
+          });
+        }
+
+        joinButton.addEventListener("click", connect);
+        roomInput.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") connect();
+        });
+        $("leave-button").addEventListener("click", () => leave("You left the game."));
+
+        const comboToggle = $("combo-toggle");
+        const comboGuide = $("combo-guide");
+        const comboClose = $("combo-close");
+        function closeComboGuide() {
+          comboGuide.hidden = true;
+          comboToggle.setAttribute("aria-expanded", "false");
+          comboToggle.focus();
+        }
+        comboToggle.addEventListener("click", () => {
+          comboGuide.hidden = false;
+          comboToggle.setAttribute("aria-expanded", "true");
+          comboClose.focus();
+        });
+        comboClose.addEventListener("click", closeComboGuide);
+        comboGuide.addEventListener("click", (event) => {
+          if (event.target === comboGuide) closeComboGuide();
+        });
+        addEventListener("keydown", (event) => {
+          if (event.key === "Escape" && !comboGuide.hidden) closeComboGuide();
+        });
+
+        document.querySelectorAll(".pad-button").forEach((button) => {
+          const key = button.dataset.key;
+          button.addEventListener("pointerdown", (event) => {
+            event.preventDefault();
+            if (!socket || socket.readyState !== WebSocket.OPEN) return;
+            button.setPointerCapture(event.pointerId);
+            button.classList.add("pressed");
+            const wasDown = keys.has(key);
+            keys.add(key);
+            sendInput(wasDown ? null : new Set([key]));
+          });
+          const release = (event) => {
+            if (event && button.hasPointerCapture(event.pointerId)) button.releasePointerCapture(event.pointerId);
+            button.classList.remove("pressed");
+            if (!keys.delete(key)) return;
+            sendInput();
+          };
+          button.addEventListener("pointerup", release);
+          button.addEventListener("pointercancel", release);
+          button.addEventListener("lostpointercapture", () => {
+            button.classList.remove("pressed");
+            if (keys.delete(key)) sendInput();
+          });
+        });
+
+        addEventListener("keydown", (event) => {
+          const key = event.key.toLowerCase();
+          if (!["a", "d", "w", "j", "k", "l", "u", "o", "e", "i", "r"].includes(key)) return;
+          event.preventDefault();
+          const wasDown = keys.has(key);
+          keys.add(key);
+          sendInput(wasDown ? null : new Set([key]));
+        });
+        addEventListener("keyup", (event) => {
+          const key = event.key.toLowerCase();
+          if (keys.delete(key)) sendInput();
+        });
+        addEventListener("blur", clearKeys);
+        document.addEventListener("visibilitychange", () => {
+          if (document.hidden) clearKeys();
+        });
+        if (initialRoom) setTimeout(connect, 100);
+      })();
+    </script>
+  </body>
+</html>
