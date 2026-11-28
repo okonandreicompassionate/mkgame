@@ -242,6 +242,78 @@
         color: var(--gold);
         font-size: 10px;
       }
+      #selection-lobby[hidden],
+      #controller-arena[hidden],
+      #control-hint[hidden] {
+        display: none !important;
+      }
+      .selection-lobby {
+        display: flex;
+        min-height: 0;
+        flex: 1;
+        align-items: center;
+        justify-content: center;
+        padding: 8px 0;
+      }
+      .selection-card {
+        width: min(460px, 100%);
+        max-height: 100%;
+        overflow-y: auto;
+        padding: clamp(18px, 5vw, 28px);
+        border: 1px solid #70dcff40;
+        border-radius: 22px;
+        background: linear-gradient(145deg, #1a1d2b, #10121c);
+        box-shadow: 0 20px 60px #0008, inset 0 1px #ffffff12;
+        text-align: center;
+        touch-action: pan-y;
+      }
+      .selection-step {
+        color: var(--blue);
+        font-size: 10px;
+        font-weight: 900;
+        letter-spacing: 0.16em;
+      }
+      .selection-card h1 {
+        margin: 10px 0 6px;
+        font-size: clamp(23px, 7vw, 34px);
+        letter-spacing: 0.06em;
+      }
+      .selection-description {
+        min-height: 38px;
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+      .selection-actions {
+        display: grid;
+        grid-template-columns: minmax(64px, 1fr) minmax(110px, 1.6fr) minmax(64px, 1fr);
+        gap: 8px;
+        margin-top: 20px;
+      }
+      .selection-actions button {
+        min-width: 0;
+        min-height: 50px;
+        padding: 0 8px;
+        font-size: 10px;
+      }
+      .selection-actions .lobby-confirm {
+        width: 100%;
+        min-height: 50px;
+        margin: 0;
+        letter-spacing: 0.05em;
+      }
+      .selection-actions button:disabled {
+        opacity: 0.42;
+        cursor: default;
+      }
+      .selection-hint {
+        min-height: 32px;
+        margin: 14px 0 0;
+        color: #b7bac7;
+        font-size: 12px;
+        line-height: 1.45;
+      }
       .arena {
         display: grid;
         min-height: 0;
@@ -552,7 +624,27 @@
           <button class="secondary" id="leave-button" type="button">LEAVE</button>
         </div>
       </header>
-      <section class="arena" aria-label="Game controls">
+      <section
+        class="selection-lobby"
+        id="selection-lobby"
+        aria-live="polite"
+        hidden
+      >
+        <div class="selection-card">
+          <div class="selection-step" id="selection-step">WAITING FOR THE LOBBY</div>
+          <h1 id="selection-name">Choose your fighter</h1>
+          <p class="selection-description" id="selection-description">
+            The laptop is setting up the match.
+          </p>
+          <div class="selection-actions">
+            <button class="secondary" id="selection-prev" type="button" aria-label="Previous choice">◀ PREV</button>
+            <button class="primary lobby-confirm" id="selection-confirm" type="button" disabled>CONFIRM</button>
+            <button class="secondary" id="selection-next" type="button" aria-label="Next choice">NEXT ▶</button>
+          </div>
+          <p class="selection-hint" id="selection-hint"></p>
+        </div>
+      </section>
+      <section class="arena" id="controller-arena" aria-label="Game controls">
         <div class="move-controls">
           <button class="pad-button move" data-key="w" aria-label="Jump" type="button"><span class="icon">▲</span><span class="caption">JUMP</span></button>
           <button class="pad-button move" data-key="a" aria-label="Move left" type="button"><span class="icon">◀</span><span class="caption">LEFT</span></button>
@@ -569,7 +661,7 @@
           <button class="pad-button utility" data-key="i" aria-label="Flight or mobility" type="button"><span class="icon">↟</span><span class="caption">MOBILITY</span></button>
         </div>
       </section>
-      <div class="hint"><strong>Hold</strong> movement and block · <strong>Tap</strong> attacks · You can press multiple buttons</div>
+      <div class="hint" id="control-hint"><strong>Hold</strong> movement and block · <strong>Tap</strong> attacks · You can press multiple buttons</div>
     </main>
     <div
       class="combo-backdrop"
@@ -637,13 +729,38 @@
         const joinButton = $("join-button");
         const joinScreen = $("join-screen");
         const controllerScreen = $("controller-screen");
+        const selectionLobby = $("selection-lobby");
+        const controllerArena = $("controller-arena");
+        const controlHint = $("control-hint");
+        const comboToggle = $("combo-toggle");
+        const comboGuide = $("combo-guide");
+        const comboClose = $("combo-close");
+        const hitVibrations = {
+          hit: [9],
+          block: [6],
+          heavy: [24],
+          combo: [14, 22, 18, 20, 24],
+          super: [22, 18, 46],
+          ko: [34, 24, 58],
+        };
+        const hitFeedbackPriority = {
+          hit: 1,
+          block: 1,
+          heavy: 2,
+          combo: 3,
+          super: 4,
+          ko: 5,
+        };
         let socket = null;
         let player = 0;
         let roomCode = "";
         let roomMode = "duo";
+        let lobbyState = null;
         let pingId = 0;
         let pingSentAt = 0;
         let pingTimer = 0;
+        let hitFeedbackUntil = 0;
+        let hitFeedbackRank = 0;
 
         const initialRoom = new URLSearchParams(location.search).get("room");
         if (initialRoom) roomInput.value = initialRoom.replace(/[^A-Za-z0-9]/g, "").slice(0, 6).toUpperCase();
@@ -662,6 +779,99 @@
           element.classList.toggle("online", state === "online");
           element.classList.toggle("error", state === "error");
           element.classList.toggle("slow", state === "slow");
+        }
+
+        function vibrate(duration) {
+          if (typeof navigator.vibrate === "function") navigator.vibrate(duration);
+        }
+
+        function vibrateForHit(kind) {
+          const pattern = hitVibrations[kind];
+          const rank = hitFeedbackPriority[kind];
+          if (
+            !Array.isArray(pattern) ||
+            !rank ||
+            typeof navigator.vibrate !== "function"
+          )
+            return;
+          const now = performance.now();
+          if (now < hitFeedbackUntil && rank <= hitFeedbackRank) return;
+          navigator.vibrate(pattern);
+          hitFeedbackUntil =
+            now + pattern.reduce((duration, part) => duration + part, 0);
+          hitFeedbackRank = rank;
+        }
+
+        function showSelectionLobby() {
+          selectionLobby.hidden = false;
+          controllerArena.hidden = true;
+          controlHint.hidden = true;
+          comboToggle.hidden = true;
+          comboGuide.hidden = true;
+          comboToggle.setAttribute("aria-expanded", "false");
+        }
+
+        function showControllerControls() {
+          selectionLobby.hidden = true;
+          controllerArena.hidden = false;
+          controlHint.hidden = false;
+          comboToggle.hidden = false;
+        }
+
+        function updateLobby(state) {
+          lobbyState = state;
+          const activePlayer = state.activePlayer === 2 ? 2 : 1;
+          const isStage = state.kind === "stage";
+          const canChoose =
+            activePlayer === player &&
+            !state.waiting &&
+            socket &&
+            socket.readyState === WebSocket.OPEN;
+          selectionLobby.hidden = false;
+          $("selection-step").textContent = state.waiting
+            ? roomMode === "phone-bot"
+              ? "WAITING FOR PHONE CONTROLLER"
+              : "WAITING FOR BOTH PLAYERS"
+            : canChoose
+              ? isStage && player === 1
+                ? "HOST · YOUR TURN"
+                : "PLAYER " + player + " · YOUR TURN"
+              : isStage
+                ? "HOST (PLAYER 1) IS PICKING"
+                : "PLAYER " + activePlayer + " IS PICKING";
+          $("selection-name").textContent =
+            state.name || (isStage ? "Choose a stage" : "Choose a fighter");
+          $("selection-description").textContent = state.description || "";
+          $("selection-prev").disabled = !canChoose;
+          $("selection-next").disabled = !canChoose;
+          $("selection-confirm").disabled = !canChoose;
+          $("selection-confirm").textContent = isStage
+            ? "PICK STAGE"
+            : "LOCK IN FIGHTER";
+          $("selection-hint").textContent = state.waiting
+            ? roomMode === "phone-bot"
+              ? "Connect your phone to begin the match."
+              : "Connect both phone controllers to begin the match."
+            : canChoose
+              ? isStage
+                ? "As host, choose the arena. Only you can change the stage."
+                : "Browse with the arrows, then confirm your choice."
+              : isStage
+                ? "Waiting for the host (Player 1) to choose the stage."
+                : "Waiting for Player " + activePlayer + " to choose.";
+        }
+
+        function sendMenuInput(action) {
+          if (
+            !socket ||
+            socket.readyState !== WebSocket.OPEN ||
+            !lobbyState ||
+            lobbyState.waiting ||
+            lobbyState.activePlayer !== player
+          )
+            return;
+          socket.send(JSON.stringify({ type: "menuInput", action }));
+          vibrate(action === "confirm" ? 14 : 7);
         }
 
         function clearKeys() {
@@ -732,15 +942,17 @@
             if (message.type === "joined" && Number.isInteger(message.player) && message.player >= 1 && message.player <= 2) {
               player = message.player;
               roomMode = message.mode === "phone-bot" ? "phone-bot" : "duo";
+              lobbyState = null;
               $("player-badge").textContent = String(player);
               $("player-name").textContent = "PLAYER " + player;
               $("room-label").textContent = "ROOM " + roomCode;
               joinScreen.classList.remove("active");
               controllerScreen.classList.add("active");
+              showSelectionLobby();
               setConnection(
                 roomMode === "phone-bot"
                   ? "Connected · versus computer"
-                  : "Connected · waiting for the game",
+                  : "Connected · choosing fighters",
                 "online",
               );
               joinButton.disabled = false;
@@ -754,23 +966,40 @@
               }, 3000);
               return;
             }
-            if (message.type === "matchStart")
+            if (message.type === "lobbyState") {
+              updateLobby(message);
+              return;
+            }
+            if (message.type === "hitFeedback") {
+              vibrateForHit(message.kind);
+              return;
+            }
+            if (message.type === "matchStart") {
+              lobbyState = null;
+              showControllerControls();
               setConnection(
                 roomMode === "phone-bot"
                   ? "Match in progress · versus computer"
                   : "Connected · match in progress",
                 "online",
               );
-            else if (message.type === "lobbyReset")
+            } else if (message.type === "lobbyReset") {
+              lobbyState = null;
+              showSelectionLobby();
               setConnection(
                 roomMode === "phone-bot"
                   ? "Connected · versus computer"
-                  : "Connected · waiting for the game",
+                  : "Connected · choosing fighters",
                 "online",
               );
-            else if (message.type === "pong" && message.id === pingId) {
+            } else if (message.type === "pong" && message.id === pingId) {
               const latency = Math.round(performance.now() - pingSentAt);
-              setConnection("Connected · " + latency + " ms", latency > 180 ? "slow" : "online");
+              setConnection(
+                (roomMode === "phone-bot" ? "VS COMPUTER · " : "Connected · ") +
+                  latency +
+                  " ms",
+                latency > 180 ? "slow" : "online",
+              );
             } else if (message.type === "roomClosed") leave("The laptop closed the game room.");
           });
           connection.addEventListener("error", () => {
@@ -795,9 +1024,6 @@
         });
         $("leave-button").addEventListener("click", () => leave("You left the game."));
 
-        const comboToggle = $("combo-toggle");
-        const comboGuide = $("combo-guide");
-        const comboClose = $("combo-close");
         function closeComboGuide() {
           comboGuide.hidden = true;
           comboToggle.setAttribute("aria-expanded", "false");
@@ -825,6 +1051,7 @@
             button.classList.add("pressed");
             const wasDown = keys.has(key);
             keys.add(key);
+            if (!wasDown) vibrate(["j", "k", "u", "o", "e"].includes(key) ? 10 : 6);
             sendInput(wasDown ? null : new Set([key]));
           });
           const release = (event) => {
@@ -842,13 +1069,38 @@
         });
 
         addEventListener("keydown", (event) => {
+          if (!selectionLobby.hidden) {
+            const key = event.key.toLowerCase();
+            if (event.key === "ArrowLeft" || key === "a") {
+              event.preventDefault();
+              sendMenuInput("left");
+              return;
+            }
+            if (event.key === "ArrowRight" || key === "d") {
+              event.preventDefault();
+              sendMenuInput("right");
+              return;
+            }
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              sendMenuInput("confirm");
+              return;
+            }
+            if (["arrowleft", "arrowright", "a", "d", "enter", " "].includes(key))
+              event.preventDefault();
+            return;
+          }
           const key = event.key.toLowerCase();
           if (!["a", "d", "w", "j", "k", "l", "u", "o", "e", "i", "r"].includes(key)) return;
           event.preventDefault();
           const wasDown = keys.has(key);
           keys.add(key);
+          if (!wasDown) vibrate(["j", "k", "u", "o", "e"].includes(key) ? 10 : 6);
           sendInput(wasDown ? null : new Set([key]));
         });
+        $("selection-prev").addEventListener("click", () => sendMenuInput("left"));
+        $("selection-next").addEventListener("click", () => sendMenuInput("right"));
+        $("selection-confirm").addEventListener("click", () => sendMenuInput("confirm"));
         addEventListener("keyup", (event) => {
           const key = event.key.toLowerCase();
           if (keys.delete(key)) sendInput();

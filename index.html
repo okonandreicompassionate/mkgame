@@ -1225,6 +1225,10 @@
           return;
         }
         if (state === "select") {
+          if (networkRole === "host") {
+            e.preventDefault();
+            return;
+          }
           if (k === "a") menuMove(-1);
           else if (k === "d") menuMove(1);
           else if (k === "enter" || k === "j" || e.key === " ") menuOk();
@@ -5732,6 +5736,8 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
             const player = Number(message.player);
             if (Number.isInteger(player) && player >= 1 && player <= 2)
               controllerSlots[player - 1] = true;
+            if (networkRole === "host" && state === "select")
+              drawMenu();
             if (
               connectedControllerCount() >= networkControllerLimit &&
               networkPausedForDisconnect &&
@@ -5783,6 +5789,8 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
               " phone controller" +
               (networkControllerLimit === 1 ? "" : "s") +
               " connected";
+            if (networkRole === "host" && state === "select")
+              drawMenu();
             return;
           }
           if (message.type === "input" && networkRole === "host") {
@@ -5792,6 +5800,27 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
             for (const key of INPUT_KEYS)
               if (message.pressed && message.pressed[key])
                 remotePresseds[player - 1][key] = true;
+            return;
+          }
+          if (message.type === "menuInput" && networkRole === "host") {
+            const player = Number(message.player);
+            if (
+              state !== "select" ||
+              !Number.isInteger(player) ||
+              player < 1 ||
+              player > 2 ||
+              !controllerSlots[player - 1]
+            )
+              return;
+            const activePlayer = isStageSelectionStep()
+              ? 1
+              : mStep === 0
+                ? 1
+                : 2;
+            if (player !== activePlayer) return;
+            if (message.action === "left") menuMove(-1);
+            else if (message.action === "right") menuMove(1);
+            else if (message.action === "confirm") menuOk();
             return;
           }
           if (message.type === "pong" && message.id === networkPingId) {
@@ -5933,7 +5962,7 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
             " connected" +
             (networkMode === "phone-bot"
               ? " · one phone vs computer"
-              : " · select both fighters and stage")
+              : " · choose fighters and stage on phones")
           : "";
         $("copy-menu-room").hidden = !networkRole;
         $("menu-help").textContent = waiting
@@ -5942,11 +5971,35 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
             : "Open the controller link on both phones. The game starts when both connect."
           : networkMode === "phone-bot"
             ? stageStep
-              ? "Choose a stage. Your phone controls Player 1; the computer controls Player 2."
-              : "Choose your fighter on the laptop, then play the computer using one phone."
+              ? "As host, use your phone to choose the stage. The computer controls Player 2."
+              : "Use your phone to choose Player 1; then choose an arena."
+          : networkRole === "host"
+            ? stageStep
+              ? "The host controller (Player 1) chooses the stage."
+              : "Player " +
+                (mStep + 1) +
+                ": use your phone to choose a fighter."
           : "A/D to browse · J or Enter to pick · or tap a card";
+        if (networkRole === "host") {
+          const selection = stageStep
+            ? STG[mIdx]
+            : [ROS[mIdx].name, ROS[mIdx].info];
+          netSend({
+            type: "lobbyState",
+            step: mStep,
+            kind: stageStep ? "stage" : "fighter",
+            activePlayer: stageStep || mStep === 0 ? 1 : 2,
+            index: mIdx,
+            count: it.length,
+            name: selection[0],
+            description: selection[1],
+            waiting,
+            connected: connectedControllerCount(),
+          });
+        }
         [...$("mc").children].forEach((c) => {
           c.onclick = () => {
+            if (networkRole === "host") return;
             mIdx = +c.dataset.i;
             audioInit();
             menuOk();
@@ -6112,15 +6165,7 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
           onlineStage === null
         ) return;
         if (connectedControllerCount() < networkControllerLimit) {
-          $("mt").textContent =
-            networkMode === "phone-bot"
-              ? "WAITING FOR PHONE CONTROLLER"
-              : "WAITING FOR BOTH CONTROLLERS";
-          $("mc").innerHTML = "";
-          $("menu-help").textContent =
-            networkMode === "phone-bot"
-              ? "Open the controller link on one phone. The game starts when it connects."
-              : "Open the controller link on both phones. The game starts when both connect.";
+          drawMenu();
           return;
         }
         startOnlineMatch(
@@ -9208,6 +9253,7 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
               (a.atk.hc || 0) > 0
             ),
           hv = dmg > 9;
+        let guardBroken = false;
         // attacker keeps a little forward momentum (weight behind the blow) instead of snapping backwards
         if (
           a.atk &&
@@ -9243,6 +9289,7 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
             if (d.gb >= 34) {
               d.gb = 0;
               d.block = false;
+              guardBroken = true;
               d.hit = 16;
               d.hz = "mid";
               d.vx = a.face * 0.19;
@@ -9350,6 +9397,23 @@ float lum=dot(c1,vec3(.299,.587,.114));c1=mix(vec3(lum),c1,satA)*briA;diffuseCol
           }
         }
         d.hp = Math.max(0, d.hp - dmg);
+        const killed = d.hp === 0;
+        if (networkRole === "host") {
+          const player =
+            d === P ? 1 : networkMode === "duo" && d === B ? 2 : 0;
+          if (player) {
+            const firstSuperHit =
+              !guard && specialMove && a.atk && (a.atk.hc || 0) === 0;
+            const comboMilestone =
+              !guard && (a.cmb === 3 || a.cmb === 5);
+            let kind = guard ? "block" : "hit";
+            if (hv || ctr || guardBroken) kind = "heavy";
+            if (comboMilestone) kind = "combo";
+            if (firstSuperHit) kind = "super";
+            if (killed) kind = "ko";
+            netSend({ type: "hitFeedback", player, kind });
+          }
+        }
       }
 
       // 4) natural body mechanics layered on the existing pose

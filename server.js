@@ -178,6 +178,12 @@ function routeMessage(socket, message) {
   const isHost = socket.role === 'host';
   const target = isHost ? null : room.host;
 
+  if (!isHost && socket.role === 'controller' && type === 'menuInput') {
+    const action = message.action;
+    if (!['left', 'right', 'confirm'].includes(action)) return;
+    return send(target, { type: 'menuInput', player: socket.player, action });
+  }
+
   if (!isHost && socket.role === 'controller' && type === 'input') {
     const input = message.input;
     if (!input || typeof input !== 'object' || Array.isArray(input)) return;
@@ -194,6 +200,39 @@ function routeMessage(socket, message) {
     // Under congestion, drop plain held-key updates but never a fresh key press.
     if (!anyPressed && target.bufferedAmount > INPUT_BACKPRESSURE_BYTES) return;
     return send(target, { type: 'input', player: socket.player, input: cleanInput, pressed: cleanPressed });
+  }
+
+  if (isHost && type === 'hitFeedback') {
+    const player = Number(message.player);
+    const kind = message.kind;
+    if (
+      !Number.isInteger(player) ||
+      player < 1 ||
+      player > 2 ||
+      !['hit', 'block', 'heavy', 'combo', 'super', 'ko'].includes(kind)
+    ) return;
+    const controller = room.controllers[player - 1];
+    if (controller) send(controller, { type: 'hitFeedback', kind });
+    return;
+  }
+
+  if (isHost && type === 'lobbyState') {
+    const state = {
+      type: 'lobbyState',
+      step: Number.isInteger(message.step) ? Math.max(0, message.step) : 0,
+      kind: message.kind === 'stage' ? 'stage' : 'fighter',
+      activePlayer: message.activePlayer === 2 ? 2 : 1,
+      index: Number.isInteger(message.index) ? Math.max(0, message.index) : 0,
+      count: Number.isInteger(message.count) ? Math.max(0, message.count) : 0,
+      name: typeof message.name === 'string' ? message.name.slice(0, 60) : '',
+      description: typeof message.description === 'string' ? message.description.slice(0, 160) : '',
+      waiting: message.waiting === true,
+      connected: Number.isInteger(message.connected) ? Math.max(0, Math.min(2, message.connected)) : 0
+    };
+    for (const controller of room.controllers) {
+      if (controller) send(controller, state);
+    }
+    return;
   }
 
   if (isHost && (type === 'matchStart' || type === 'lobbyReset')) {
